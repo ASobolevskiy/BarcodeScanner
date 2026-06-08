@@ -1,0 +1,132 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>BarcodeScanner</name>
+    </assembly>
+    <members>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.PossibleFormats">
+            <summary>
+            List of symbologies you want to detect. By default, all possible symbologies included.
+            You can narrow down the list by setting this to your own list of symbologies.
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.DelayBetweenContinuousScans">
+            <summary>
+            Delay in milliseconds. 1 second by default.
+            If you are in continuous scanning mode use this to set delay between consecutive
+            scans. 
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.DelayBetweenAnalyzingFrames">
+            <summary>
+            Delay in milliseconds. 150ms by default.
+            Use this to tune delay between frame analysis
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.DelayBeforeAnalyzingFrames">
+            <summary>
+            Delay in milliseconds. 300ms by default.
+            Use this to tune the delay before first frame will be analyzed.
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.CustomOverlayFactory">
+            <summary>
+            Factory for creating custom scanner overlay.
+            <remarks>The library will call it for view creation passing its context (Activity or ViewController) as argument
+            for memory leaks prevention
+            The returning object must be an Android.Views.View or UIKit.UIView
+            In addition if you want to create custom overlay with animations your overlay class must implement
+            IActiveScannerOverlay interface provided by this library otherwise it will not receive updates from scan engine
+            </remarks>
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.DelayBeforeScannerClose">
+            <summary>
+            Delay before scanner closure after successful scan (in milliseconds)
+            </summary>
+            <remarks>
+            ⚠️ WARNING: Minimal acceptable value is <b>300 ms</b>.
+            If you try to set value below 300ms it will be automatically set
+            to 300ms to ensure there will be no problems with animations.
+            </remarks>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.UseAutoClose">
+            <summary>
+            Set if you want to enable automatic scanner closure.
+            <remarks>
+            This works only in single scan mode. Continuous scan mode does not use this feature.
+            </remarks>
+            </summary>
+        </member>
+        <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.AutoCloseDelaySeconds">
+            <summary>
+            Delay (in seconds) before scanner will auto close. 15 seconds by default.
+            <remarks>
+            If you set <b>UseAutoClose = true</b> and <b>AutoCloseDelaySeconds = 0</b> automatic closure will not work.
+            </remarks>
+            </summary>
+        </member>
+        <member name="F:BarcodeScanner.Models.BarcodeSymbology.Unknown">
+            <summary>
+            Do not set this explicitly. If this value will be in possible formats 
+            </summary>
+        </member>
+        <member name="F:BarcodeScanner.Models.BarcodeSymbology.AllSymbologies">
+            <summary>
+            Use this if you want to include all symbologies at once
+            </summary>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromRect(Android.Graphics.RectF)">
+            <summary>
+            Creates CornerPoints from rect.
+            </summary>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromFloatArray(System.Single[])">
+            <summary>
+            Creates CornerPoints from flat float array.
+            </summary>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.ToFloatArray">
+            <summary>
+            Converts CornerPoints to flat float array
+            </summary>
+            <returns>Float array of 8 floats</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetCenter">
+            <summary>
+            Gets center coordinates of a rectangle formed by CornerPoints
+            </summary>
+            <returns>Point2D of rect center</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.Lerp(BarcodeScanner.Helpers.CornerPoints,BarcodeScanner.Helpers.CornerPoints,System.Single)">
+            <summary>
+            Calculates linear interpolation between two sets of CornerPoints. Used in animations
+            </summary>
+            <param name="from">Current position in CornerPoints</param>
+            <param name="to">Target position in CornerPoints</param>
+            <param name="progress">Current animation progress returned by animator</param>
+            <returns>Interpolated set of CornerPoints</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.LerpPoint(BarcodeScanner.Helpers.Point2D,BarcodeScanner.Helpers.Point2D,System.Single)">
+            <summary>
+            Calculates linear interpolation between two points.
+            </summary>
+            <param name="from">Current point</param>
+            <param name="to">Target point</param>
+            <param name="factor">Smoothing factor</param>
+            <returns>Interpolated point</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetBounds">
+            <summary>
+            Calculates a bounding box
+            </summary>
+            <returns>Bounding box for specified corner points</returns>
+        </member>
+        <member name="T:BarcodeScanner.Resource">
+            <summary>
+            Android Resource Designer class.
+            Exposes the Android Resource designer assembly into the project Namespace.
+            </summary>
+        </member>
+    </members>
+</doc>

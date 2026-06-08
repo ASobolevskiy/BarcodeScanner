@@ -1,16 +1,24 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0-android;net10.0-ios</TargetFrameworks>
         <LangVersion>latestmajor</LangVersion>
+        <OutputType>Library</OutputType>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     </PropertyGroup>
-
     <ItemGroup>
-      <Folder Include="Android\" />
-      <Folder Include="iOS\" />
-      <Folder Include="Shared\" />
+        <Compile Include="**\*.shared.cs"/>
     </ItemGroup>
-
+    <ItemGroup Condition="$(TargetFramework.EndsWith('android'))">
+        <Compile Include="**\*.android.cs"/>
+        <PackageReference Include="Xamarin.AndroidX.Camera.Camera2" Version="1.5.3.1" />
+        <PackageReference Include="Xamarin.AndroidX.Camera.View" Version="1.5.3.1" />
+        <PackageReference Include="Xamarin.AndroidX.ConstraintLayout" Version="2.2.1.5" />
+        <PackageReference Include="Xamarin.Google.MLKit.BarcodeScanning" Version="117.3.0.7" />
+        <AndroidResource Include="Resources\layout\*.xml"/>
+    </ItemGroup>
+    <ItemGroup Condition="$(TargetFramework.EndsWith('ios'))">
+        <Compile Include="**\*.ios.cs"/>
+    </ItemGroup>
 </Project>

@@ -12,4 +12,22 @@
             android:layout_height="wrap_content"
             android:text="Scan barcode"
             android:textSize="20sp"/>
+    <Button
+            android:id="@+id/continuous_scan_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan Continuously"
+            android:textSize="20sp"/>
+    <Button
+            android:id="@+id/scan_auto_close_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan With autoclose"
+            android:textSize="20sp"/>
+    <Button
+            android:id="@+id/custom_overlay_scan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan with custom overlay"
+            android:textSize="20sp"/>
 </LinearLayout>

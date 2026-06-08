@@ -16,4 +16,7 @@
       <CodesignKey>Apple Development: Vadim Voznesenskiy (22TRC3P735)</CodesignKey>
       <CodesignProvision>BarcodescanTestDevelopment</CodesignProvision>
     </PropertyGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\BarcodeScanner\BarcodeScanner.csproj" />
+    </ItemGroup>
 </Project>

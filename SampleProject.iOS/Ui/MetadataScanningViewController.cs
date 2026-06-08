@@ -1,4 +1,5 @@
 using AVFoundation;
+using BarcodeScanner.iOS.Ui.Views;
 using CoreFoundation;
 using SampleProject.iOS.Extensions;
 
@@ -8,7 +9,7 @@ public class MetadataScanningController : UIViewController
 {
     private AVCaptureSession? _session;
     private AVCaptureVideoPreviewLayer? _previewLayer;
-    private ScannerOverlayView? _overlayView;
+    private BarcodeScannerOverlayView? _overlayView;
     private AVCaptureMetadataOutput? _metadataOutput;
     private DispatchQueue? _metadataQueue;
     private volatile bool _isScanning = true;
@@ -57,7 +58,7 @@ public class MetadataScanningController : UIViewController
     {
         if(View == null)
             return;
-        _overlayView = new ScannerOverlayView();
+        _overlayView = new BarcodeScannerOverlayView();
         _overlayView.TranslatesAutoresizingMaskIntoConstraints = false;
         Add(_overlayView);
         

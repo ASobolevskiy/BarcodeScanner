@@ -2,6 +2,9 @@ namespace BarcodeScanner.Models;
 
 public enum BarcodeSymbology
 {
+    /// <summary>
+    /// Do not set this explicitly. If this value will be in possible formats 
+    /// </summary>
     Unknown,
     Aztec,
     Code128,

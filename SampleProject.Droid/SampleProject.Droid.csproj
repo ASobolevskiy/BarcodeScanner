@@ -14,10 +14,13 @@
         -->
         <TrimMode>full</TrimMode>
     </PropertyGroup>
+<!--    <ItemGroup>-->
+<!--      <PackageReference Include="Xamarin.AndroidX.Camera.Camera2" Version="1.5.3.1" />-->
+<!--      <PackageReference Include="Xamarin.AndroidX.Camera.View" Version="1.5.3.1" />-->
+<!--      <PackageReference Include="Xamarin.AndroidX.ConstraintLayout" Version="2.2.1.5" />-->
+<!--      <PackageReference Include="Xamarin.Google.MLKit.BarcodeScanning" Version="117.3.0.7" />-->
+<!--    </ItemGroup>-->
     <ItemGroup>
-      <PackageReference Include="Xamarin.AndroidX.Camera.Camera2" Version="1.5.3.1" />
-      <PackageReference Include="Xamarin.AndroidX.Camera.View" Version="1.5.3.1" />
-      <PackageReference Include="Xamarin.AndroidX.ConstraintLayout" Version="2.2.1.5" />
-      <PackageReference Include="Xamarin.Google.MLKit.BarcodeScanning" Version="117.3.0.7" />
+      <ProjectReference Include="..\BarcodeScanner\BarcodeScanner.csproj" />
     </ItemGroup>
 </Project>
