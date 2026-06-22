@@ -1,9 +1,13 @@
+using System;
 using BarcodeScanner.Shared.Enums;
 using CoreAnimation;
+using CoreGraphics;
+using Foundation;
+using UIKit;
 
-namespace BarcodeScanner.iOS.Ui.Views;
+namespace BarcodeScanner.Ui.Views;
 
-public sealed class BarcodeScannerOverlayView : UIView
+public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
 {
     private readonly CAShapeLayer _topLeftLayer;
     private readonly CAShapeLayer _topRightLayer;
@@ -210,13 +214,21 @@ public sealed class BarcodeScannerOverlayView : UIView
 
     private void AnimateLayer(CAShapeLayer layer, CGPath targetPath, CGColor targetColor)
     {
-        layer.Path = targetPath;
-        layer.StrokeColor = targetColor;
+        var currentPath = (layer.PresentationLayer as CAShapeLayer)?.Path ?? layer.Path;
+        var currentColor = (layer.PresentationLayer as CAShapeLayer)?.StrokeColor ?? layer.StrokeColor;
         
         var pathAnim = CABasicAnimation.FromKeyPath("path");
+        if (currentPath is not null)
+        {
+            pathAnim.From = FromObject(currentPath);
+        }
         pathAnim.To = FromObject(targetPath);
         
         var colorAnim = CABasicAnimation.FromKeyPath("strokeColor");
+        if (currentColor is not null)
+        {
+            colorAnim.From = FromObject(currentColor);
+        }
         colorAnim.To = FromObject(targetColor);
         
         var group = new CAAnimationGroup
@@ -229,6 +241,32 @@ public sealed class BarcodeScannerOverlayView : UIView
         };
 
         layer.AddAnimation(group, null);
+        
+        layer.Path = targetPath;
+        layer.StrokeColor = targetColor;
+    }
+    
+    public void ClearOverlay()
+    {
+        ResetToViewfinder();
+    }
+
+    public void UpdateOverlay(string? barcodeValue, float[]? targetPoints)
+    {
+        if (targetPoints == null || targetPoints.Length < 8)
+        {
+            ClearOverlay();
+            return;
+        }
+        
+        var minX = Math.Min(Math.Min(targetPoints[0], targetPoints[2]), Math.Min(targetPoints[4], targetPoints[6]));
+        var minY = Math.Min(Math.Min(targetPoints[1], targetPoints[3]), Math.Min(targetPoints[5], targetPoints[7]));
+        var maxX = Math.Max(Math.Max(targetPoints[0], targetPoints[2]), Math.Max(targetPoints[4], targetPoints[6]));
+        var maxY = Math.Max(Math.Max(targetPoints[1], targetPoints[3]), Math.Max(targetPoints[5], targetPoints[7]));
+
+        var rect = new CGRect(minX, minY, maxX - minX, maxY - minY);
+        
+        UpdateCorners(rect, animate: true, isDetected: true);
     }
     
     protected override void Dispose(bool disposing)

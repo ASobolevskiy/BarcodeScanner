@@ -1,6 +1,8 @@
+using System.Collections.Generic;
+using System.Linq;
 using AVFoundation;
 
-namespace SampleProject.iOS.Extensions;
+namespace BarcodeScanner;
 
 public static class ArrayExtensions
 {

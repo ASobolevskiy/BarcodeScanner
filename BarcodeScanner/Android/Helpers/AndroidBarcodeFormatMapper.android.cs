@@ -3,7 +3,7 @@ using Xamarin.Google.MLKit.Vision.Barcode.Common;
 
 namespace BarcodeScanner.Helpers;
 
-internal static class BarcodeFormatMapper
+internal static class AndroidBarcodeFormatMapper
 {
     internal static int ToMlKitFormat(this BarcodeSymbology symbology)
     {

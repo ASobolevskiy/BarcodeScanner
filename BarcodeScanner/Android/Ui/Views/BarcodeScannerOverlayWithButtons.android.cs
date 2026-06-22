@@ -10,6 +10,7 @@ namespace BarcodeScanner.Ui.Views;
 public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverlay
 {
     private const int BUTTON_SIZE = 56;
+    private const int BUTTON_MARGIN = 60;
     
     private BarcodeScannerOverlayView _drawingView;
     private Button _btnBack;
@@ -60,8 +61,8 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
         var backParams = new LayoutParams(_buttonSizePx, _buttonSizePx)
         {
             Gravity = GravityFlags.Bottom | GravityFlags.Start,
-            BottomMargin = 60,
-            MarginStart = 60
+            BottomMargin = BUTTON_MARGIN,
+            MarginStart = BUTTON_MARGIN
         };
         _btnBack.Click += (s, e) => OnBackRequested?.Invoke();
         AddView(_btnBack, backParams);
@@ -70,8 +71,8 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
         var torchParams = new LayoutParams(_buttonSizePx, _buttonSizePx)
         {
             Gravity = GravityFlags.Bottom | GravityFlags.End,
-            BottomMargin = 60,
-            MarginEnd = 60
+            BottomMargin = BUTTON_MARGIN,
+            MarginEnd = BUTTON_MARGIN
         };
         _btnTorch.Click += (s, e) => 
         {

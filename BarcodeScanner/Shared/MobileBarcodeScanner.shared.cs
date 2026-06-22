@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using BarcodeScanner.Models;
 using BarcodeScanner.Shared.Enums;
 
@@ -5,8 +10,11 @@ namespace BarcodeScanner;
 
 public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 {
+    private static readonly ConcurrentDictionary<string, MobileBarcodeScanner> ActiveScanners = new();
+    private static readonly ConcurrentDictionary<string, BarcodeScanningOptions> OptionsRegistry = new();
+    
     private readonly BarcodeScanningOptions _defaultOptions = new();
-    internal string InstanceId { get; } = Guid.NewGuid().ToString();
+    private string InstanceId { get; } = Guid.NewGuid().ToString();
     
     private TaskCompletionSource<BarcodeResult?>? _singleScanTcs;
     private TaskCompletionSource<bool>? _continuousScanTcs;
@@ -15,7 +23,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private IDisposable? _autoCloseRegistration;
     
     private bool _isTorchOn;
-    private CancellationTokenSource _cts;
+    private CancellationTokenSource? _cts;
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
@@ -24,13 +32,15 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         
         var finalOptions = options ?? _defaultOptions;
         finalOptions.ScannerMode = BarcodeScanningOptions.ScanType.OneShot;
+        
+        RegisterInstance(finalOptions);
 
         if (finalOptions is { UseAutoClose: true, AutoCloseDelaySeconds: > 0 })
         {
             _autoCloseCts = new CancellationTokenSource(TimeSpan.FromSeconds(finalOptions.AutoCloseDelaySeconds));
             _autoCloseRegistration = _autoCloseCts.Token.Register(CancelByAutoClose);
         }
-        return PlatformScanSingleAsync(finalOptions);
+        return PlatformScanSingleAsync();
     }
 
     public Task ScanContinuouslyAsync(
@@ -43,10 +53,13 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         
         var finalOptions = options ?? _defaultOptions;
         finalOptions.ScannerMode = BarcodeScanningOptions.ScanType.Continuous;
+        
+        RegisterInstance(finalOptions);
+        
         _cts.Token.Register(CancelScan);
         _continuousCallback = onResult;
         
-        return PlatformScanContinuousAsync(finalOptions);
+        return PlatformScanContinuousAsync();
     }
 
     public void CancelScan()
@@ -55,15 +68,15 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         CancelAllScans(ScanStatus.CancelledByUser);
         PlatformCancelScan();
     }
-    
-    internal void CancelByAutoClose()
+
+    private void CancelByAutoClose()
     {
         CleanupAutoClose();
         CancelAllScans(ScanStatus.AutoClosed);
         PlatformCancelScan();
     }
 
-    internal void FailScan(string errorMessage)
+    private void FailScan(string errorMessage)
     {
         CleanupAutoClose();
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
@@ -80,7 +93,6 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     {
         _isTorchOn = !_isTorchOn;
         PlatformSetTorch(_isTorchOn);
-        
     }
 
     private void EnsureNotScanning()
@@ -95,16 +107,16 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     {
         _continuousCallback?.Invoke(result);
     }
-    
-    internal void CompleteSingleScan(BarcodeResult result)
+
+    private void CompleteSingleScan(BarcodeResult result)
     {
         CleanupAutoClose();
         result = result with { Status = ScanStatus.Success };
         var tcs = Interlocked.Exchange(ref _singleScanTcs, null);
         tcs?.TrySetResult(result);
     }
-    
-    internal void CompleteContinuousScan()
+
+    private void CompleteContinuousScan()
     {
         CleanupAutoClose();
         var tcs = Interlocked.Exchange(ref _continuousScanTcs, null);
@@ -132,8 +144,83 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         _autoCloseCts = null;
     }
     
-    private partial Task<BarcodeResult?> PlatformScanSingleAsync(BarcodeScanningOptions options);
-    private partial Task PlatformScanContinuousAsync(BarcodeScanningOptions options);
+    private void RegisterInstance(BarcodeScanningOptions options)
+    {
+        ActiveScanners[InstanceId] = this;
+        OptionsRegistry[InstanceId] = options;
+    }
+    
+    internal static void DispatchSingleResult(string instanceId, BarcodeResult result)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchSingleResult вызван с пустым _instanceId.");
+            return;
+        }
+        
+        if (ActiveScanners.TryRemove(instanceId, out var scanner)) 
+        {
+            scanner.CompleteSingleScan(result);
+        }
+        Cleanup(instanceId);
+    }
+    
+    internal static void DispatchContinuousResult(string instanceId, BarcodeResult result)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchContinuousResult вызван с пустым _instanceId.");
+            return;
+        }
+        
+        if (ActiveScanners.TryGetValue(instanceId, out var scanner)) 
+        {
+            scanner.TriggerContinuousCallback(result);
+        }
+    }
+
+    internal static void DispatchCancel(string instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchCancel вызван с пустым _instanceId.");
+            return;
+        }
+        
+        if (ActiveScanners.TryRemove(instanceId, out var scanner))
+        {
+            scanner.CompleteContinuousScan();
+            scanner.CancelAllScans(ScanStatus.CancelledByUser);
+        }
+        Cleanup(instanceId);
+    }
+
+    internal static void DispatchError(string instanceId, string errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchError вызван с пустым _instanceId.");
+            return;
+        }
+
+        if (ActiveScanners.TryRemove(instanceId, out var scanner))
+        {
+            scanner.FailScan(errorMessage);
+        }
+        Cleanup(instanceId);
+    }
+
+    private static void Cleanup(string instanceId)
+    {
+        ActiveScanners.TryRemove(instanceId, out _);
+        OptionsRegistry.TryRemove(instanceId, out _);
+    }
+
+    internal static BarcodeScanningOptions GetOptions(string instanceId) => 
+        OptionsRegistry.TryGetValue(instanceId, out var options) ? options : new BarcodeScanningOptions();
+    
+    private partial Task<BarcodeResult?> PlatformScanSingleAsync();
+    private partial Task PlatformScanContinuousAsync();
     private partial void PlatformCancelScan();
     private partial void PlatformSetTorch(bool torchOn);
 }

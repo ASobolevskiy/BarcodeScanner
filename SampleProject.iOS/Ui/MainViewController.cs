@@ -1,3 +1,6 @@
+using BarcodeScanner;
+using BarcodeScanner.Models;
+
 namespace SampleProject.iOS;
 
 public class MainViewController : UIViewController
@@ -8,23 +11,51 @@ public class MainViewController : UIViewController
         if (View == null)
             return;
         View.BackgroundColor = UIColor.White;
-        var button = UIButton.FromType(UIButtonType.RoundedRect);
-        button.TranslatesAutoresizingMaskIntoConstraints = false;
-        button.SetTitle("Start Scanning", UIControlState.Normal);
-        View.AddSubview(button);
         
-        button.CenterXAnchor.ConstraintEqualTo(View.CenterXAnchor).Active = true;
-        button.CenterYAnchor.ConstraintEqualTo(View.CenterYAnchor).Active = true;
-
-        button.TouchUpInside += (_, _) =>
+        var scanOneShotButton = UIButton.FromType(UIButtonType.RoundedRect);
+        scanOneShotButton.TranslatesAutoresizingMaskIntoConstraints = false;
+        scanOneShotButton.SetTitle("Start Scanning", UIControlState.Normal);
+        View.AddSubview(scanOneShotButton);
+        
+        scanOneShotButton.CenterXAnchor.ConstraintEqualTo(View.CenterXAnchor).Active = true;
+        scanOneShotButton.CenterYAnchor.ConstraintEqualTo(View.CenterYAnchor).Active = true;
+        
+        var scanContinuousButton = UIButton.FromType(UIButtonType.RoundedRect);
+        scanContinuousButton.TranslatesAutoresizingMaskIntoConstraints = false;
+        scanContinuousButton.SetTitle("Continuous Scanning", UIControlState.Normal);
+        View.AddSubview(scanContinuousButton);
+        
+        scanContinuousButton.TopAnchor.ConstraintEqualTo(scanOneShotButton.BottomAnchor, 10).Active = true;
+        scanContinuousButton.CenterXAnchor.ConstraintEqualTo(View.CenterXAnchor).Active = true;
+        
+        var scanner = new MobileBarcodeScanner();
+        
+        
+        scanOneShotButton.TouchUpInside += async (_, _) =>
         {
-            var scannerVc = new MetadataScanningController();
-            scannerVc.OnBarcodeFound = (format, value) =>
+            var options = new BarcodeScanningOptions
             {
-                Console.WriteLine($"Считан {format}: {value}");
+                PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
             };
-            scannerVc.ModalPresentationStyle = UIModalPresentationStyle.FullScreen;
-            PresentViewController(scannerVc, true, null);
+            var result = await scanner.ScanAsync(options);
+            HandleBarcodeResult(result);
         };
+
+        scanContinuousButton.TouchUpInside += async (_, _) =>
+        {
+            var options = new BarcodeScanningOptions
+            {
+                PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
+            };
+            await scanner.ScanContinuouslyAsync(options, HandleBarcodeResult);
+        };
+    }
+
+    private void HandleBarcodeResult(BarcodeResult? result)
+    {
+        if(result != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"Found code: {result}\nTime scanned: {result.ScannedTime}");
+        }
     }
 }

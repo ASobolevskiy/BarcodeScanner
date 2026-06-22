@@ -512,7 +512,7 @@ public class BarcodeScannerActivity : FragmentActivity
         }
     }
 
-    public static void SetTorchState(string instanceId, bool turnTorchOn)
+    internal static void SetTorchState(string instanceId, bool turnTorchOn)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
             return;

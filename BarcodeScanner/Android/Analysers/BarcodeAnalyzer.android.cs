@@ -23,7 +23,7 @@ public class BarcodeAnalyzer(
         if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
             return;
         
-        if (isCooldownActive() || !throttler.ShouldAnalyze())
+        if (isCooldownActive() || !throttler.ShouldAnalyze(Android.OS.SystemClock.ElapsedRealtime()))
         {
             proxyImage.Close();
             return;

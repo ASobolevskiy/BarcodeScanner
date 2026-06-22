@@ -4,6 +4,52 @@
         <name>BarcodeScanner</name>
     </assembly>
     <members>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromRect(Android.Graphics.RectF)">
+            <summary>
+            Creates CornerPoints from rect.
+            </summary>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromFloatArray(System.Single[])">
+            <summary>
+            Creates CornerPoints from flat float array.
+            </summary>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.ToFloatArray">
+            <summary>
+            Converts CornerPoints to flat float array
+            </summary>
+            <returns>Float array of 8 floats</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetCenter">
+            <summary>
+            Gets center coordinates of a rectangle formed by CornerPoints
+            </summary>
+            <returns>Point2D of rect center</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.Lerp(BarcodeScanner.Helpers.CornerPoints,BarcodeScanner.Helpers.CornerPoints,System.Single)">
+            <summary>
+            Calculates linear interpolation between two sets of CornerPoints. Used in animations
+            </summary>
+            <param name="from">Current position in CornerPoints</param>
+            <param name="to">Target position in CornerPoints</param>
+            <param name="progress">Current animation progress returned by animator</param>
+            <returns>Interpolated set of CornerPoints</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.LerpPoint(BarcodeScanner.Helpers.Point2D,BarcodeScanner.Helpers.Point2D,System.Single)">
+            <summary>
+            Calculates linear interpolation between two points.
+            </summary>
+            <param name="from">Current point</param>
+            <param name="to">Target point</param>
+            <param name="factor">Smoothing factor</param>
+            <returns>Interpolated point</returns>
+        </member>
+        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetBounds">
+            <summary>
+            Calculates a bounding box
+            </summary>
+            <returns>Bounding box for specified corner points</returns>
+        </member>
         <member name="P:BarcodeScanner.Models.BarcodeScanningOptions.PossibleFormats">
             <summary>
             List of symbologies you want to detect. By default, all possible symbologies included.
@@ -75,52 +121,6 @@
             <summary>
             Use this if you want to include all symbologies at once
             </summary>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromRect(Android.Graphics.RectF)">
-            <summary>
-            Creates CornerPoints from rect.
-            </summary>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.FromFloatArray(System.Single[])">
-            <summary>
-            Creates CornerPoints from flat float array.
-            </summary>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.ToFloatArray">
-            <summary>
-            Converts CornerPoints to flat float array
-            </summary>
-            <returns>Float array of 8 floats</returns>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetCenter">
-            <summary>
-            Gets center coordinates of a rectangle formed by CornerPoints
-            </summary>
-            <returns>Point2D of rect center</returns>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.Lerp(BarcodeScanner.Helpers.CornerPoints,BarcodeScanner.Helpers.CornerPoints,System.Single)">
-            <summary>
-            Calculates linear interpolation between two sets of CornerPoints. Used in animations
-            </summary>
-            <param name="from">Current position in CornerPoints</param>
-            <param name="to">Target position in CornerPoints</param>
-            <param name="progress">Current animation progress returned by animator</param>
-            <returns>Interpolated set of CornerPoints</returns>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.LerpPoint(BarcodeScanner.Helpers.Point2D,BarcodeScanner.Helpers.Point2D,System.Single)">
-            <summary>
-            Calculates linear interpolation between two points.
-            </summary>
-            <param name="from">Current point</param>
-            <param name="to">Target point</param>
-            <param name="factor">Smoothing factor</param>
-            <returns>Interpolated point</returns>
-        </member>
-        <member name="M:BarcodeScanner.Helpers.CornerPoints.GetBounds">
-            <summary>
-            Calculates a bounding box
-            </summary>
-            <returns>Bounding box for specified corner points</returns>
         </member>
         <member name="T:BarcodeScanner.Resource">
             <summary>
