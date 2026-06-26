@@ -2,9 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using AVFoundation;
+using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
 using BarcodeScanner.Models;
-using BarcodeScanner.Shared.Enums;
 using BarcodeScanner.Ui.Views;
 using CoreFoundation;
 using Foundation;
@@ -20,7 +20,6 @@ public class MetadataScanningController(
 
     private UIView _overlayView;
     private IActiveScannerOverlay? _activeOverlay;
-    
     private BarcodeDetectionHandler? _detectionHandler;
     private AVCaptureSession? _session;
     private AVCaptureDevice? _cameraDevice;
@@ -74,7 +73,7 @@ public class MetadataScanningController(
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _isContinuousScan = options.ScannerMode == BarcodeScanningOptions.ScanType.Continuous;
+        _isContinuousScan = options.ScannerMode == ScanType.Continuous;
         _delayBeforeClose = options.DelayBeforeScannerClose;
     }
 
@@ -172,7 +171,7 @@ public class MetadataScanningController(
             return;
 
         var currentTimeMs = (long)(NSDate.Now.SecondsSinceReferenceDate * 1000.0);
-        var result = _detectionHandler.ProcessCode(metadataObjects, currentTimeMs, _previewLayer);
+        var result = _detectionHandler.Process(metadataObjects, currentTimeMs, _previewLayer);
 
         if (result is null) return;
         var value = result.Value;
@@ -196,7 +195,7 @@ public class MetadataScanningController(
         {
             DispatchQueue.MainQueue.DispatchAsync(() =>
             {
-                _activeOverlay?.UpdateOverlay(value.StringValue, value.SmoothedPoints);
+                _activeOverlay?.UpdateOverlay(value.RawValue, value.SmoothedPoints);
             });
         }
     }
@@ -206,9 +205,9 @@ public class MetadataScanningController(
         var result = new BarcodeResult
         {
             Status = ScanStatus.Success,
-            Symbology = detectionResult.Format.ToLocalFormat(),
-            RawValue = detectionResult.StringValue,
-            DisplayValue = detectionResult.StringValue,
+            Symbology = detectionResult.Symbology,
+            RawValue = detectionResult.RawValue,
+            DisplayValue = detectionResult.RawValue,
             ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
         
@@ -230,9 +229,9 @@ public class MetadataScanningController(
         var result = new BarcodeResult
         {
             Status = ScanStatus.Success,
-            Symbology = detectionResult.Format.ToLocalFormat(),
-            RawValue = detectionResult.StringValue,
-            DisplayValue = detectionResult.StringValue,
+            Symbology = detectionResult.Symbology,
+            RawValue = detectionResult.RawValue,
+            DisplayValue = detectionResult.RawValue,
             ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
         

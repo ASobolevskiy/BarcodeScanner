@@ -9,12 +9,10 @@ using Xamarin.Google.MLKit.Vision.Common;
 
 namespace BarcodeScanner.Analysers;
 
-public class BarcodeAnalyzer(
+internal sealed class BarcodeAnalyzer(
     IBarcodeScanner scanner,
-    Action<Barcode?> onBarcodeDetected,
-    Action<Barcode?> onVisualUpdate,
-    Func<bool> isCooldownActive,
-    FrameThrottler throttler,
+    Action<List<Barcode>> onBarcodeDetected,
+    Func<long, bool> shouldProcessFrame,
     Action<IImageProxy> onImageInfo) : Java.Lang.Object, ImageAnalysis.IAnalyzer
 {
     public Size? DefaultTargetResolution => null;
@@ -22,8 +20,9 @@ public class BarcodeAnalyzer(
     {
         if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
             return;
-        
-        if (isCooldownActive() || !throttler.ShouldAnalyze(Android.OS.SystemClock.ElapsedRealtime()))
+
+        var currentTime = Android.OS.SystemClock.ElapsedRealtime();
+        if (!shouldProcessFrame(currentTime))
         {
             proxyImage.Close();
             return;
@@ -34,25 +33,28 @@ public class BarcodeAnalyzer(
         var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
         
         scanner.Process(inputImage)
-               .AddOnSuccessListener(new BarcodeSuccessListener(onBarcodeDetected, onVisualUpdate))
+               .AddOnSuccessListener(new BarcodeSuccessListener(onBarcodeDetected))
                .AddOnFailureListener(new FailureListener())
                .AddOnCompleteListener(new CompleteListener(proxyImage.Close));
     }
     
     private class BarcodeSuccessListener(
-        Action<Barcode?> onDetected,
-        Action<Barcode?> onVisualUpdate) : Java.Lang.Object, IOnSuccessListener
+        Action<List<Barcode>> onDetected) : Java.Lang.Object, IOnSuccessListener
     {
         public void OnSuccess(Java.Lang.Object? result)
         {
+            var barcodes = new List<Barcode>();
             if (result is not JavaList list || list.Size() <= 0)
             {
                 return;
             }
 
-            var firstBarcode = list.Get(0) as Barcode;
-            onVisualUpdate.Invoke(firstBarcode);
-            onDetected.Invoke(firstBarcode);
+            for (int i = 0; i < list.Size(); i++)
+            {
+                if (list.Get(i) is Barcode barcode) barcodes.Add(barcode);
+            }
+            
+            onDetected.Invoke(barcodes);
         }
     }
 

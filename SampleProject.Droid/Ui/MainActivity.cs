@@ -1,10 +1,9 @@
 using _Microsoft.Android.Resource.Designer;
 using Android.Content;
-using Android.OS;
 using AndroidX.AppCompat.App;
 using BarcodeScanner;
+using BarcodeScanner.Enums;
 using BarcodeScanner.Models;
-using BarcodeScanner.Shared.Enums;
 
 namespace SampleProject.Droid;
 

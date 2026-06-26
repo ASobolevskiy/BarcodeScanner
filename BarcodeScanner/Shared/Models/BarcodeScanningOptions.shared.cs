@@ -70,13 +70,19 @@ public sealed class BarcodeScanningOptions
     /// </remarks>
     /// </summary>
     public int AutoCloseDelaySeconds { get; set; } = 15;
+    
+    /// <summary>
+    /// Region of Interest in relative coordinates (from 0.0 to 1.0).
+    /// If null, the viewfinder rectangle from the overlay is used (or the entire screen if the overlay is custom).
+    /// </summary>
+    public RoiRect? RegionOfInterest { get; set; }
 
     internal ScanType ScannerMode { get; set; }
+}
 
-    internal enum ScanType
-    {
-        OneShot,
-        Continuous
-    }
+public enum ScanType
+{
+    OneShot,
+    Continuous
 }
 

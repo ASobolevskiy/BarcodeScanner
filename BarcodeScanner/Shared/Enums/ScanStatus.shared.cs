@@ -1,4 +1,4 @@
-namespace BarcodeScanner.Shared.Enums;
+namespace BarcodeScanner.Enums;
 
 public enum ScanStatus
 {

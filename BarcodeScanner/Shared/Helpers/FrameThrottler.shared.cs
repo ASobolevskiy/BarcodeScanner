@@ -1,6 +1,6 @@
 namespace BarcodeScanner.Helpers;
 
-public class FrameThrottler(
+internal class FrameThrottler(
     int delayBeforeScan,
     int delayBetweenFrames)
 {

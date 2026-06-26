@@ -3,8 +3,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using BarcodeScanner.Enums;
 using BarcodeScanner.Models;
-using BarcodeScanner.Shared.Enums;
 
 namespace BarcodeScanner;
 
@@ -20,7 +20,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private TaskCompletionSource<bool>? _continuousScanTcs;
     private Action<BarcodeResult?>? _continuousCallback;
     private CancellationTokenSource? _autoCloseCts;
-    private IDisposable? _autoCloseRegistration;
+    private CancellationTokenRegistration? _autoCloseRegistration;
     
     private bool _isTorchOn;
     private CancellationTokenSource? _cts;
@@ -31,7 +31,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         _singleScanTcs = new TaskCompletionSource<BarcodeResult?>();
         
         var finalOptions = options ?? _defaultOptions;
-        finalOptions.ScannerMode = BarcodeScanningOptions.ScanType.OneShot;
+        finalOptions.ScannerMode = ScanType.OneShot;
         
         RegisterInstance(finalOptions);
 
@@ -52,7 +52,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         _continuousScanTcs = new TaskCompletionSource<bool>();
         
         var finalOptions = options ?? _defaultOptions;
-        finalOptions.ScannerMode = BarcodeScanningOptions.ScanType.Continuous;
+        finalOptions.ScannerMode = ScanType.Continuous;
         
         RegisterInstance(finalOptions);
         

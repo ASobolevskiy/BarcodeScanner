@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Android.Content;
+using Android.Graphics;
 using Android.Graphics.Drawables;
 using Android.Runtime;
 using Android.Util;
@@ -126,6 +127,8 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
     {
         _drawingView.UpdateOverlay(barcodeValue, targetPoints);
     }
+
+    public RectF GetViewfinderRect() => _drawingView.GetViewfinderRect();
 
     #endregion
 }

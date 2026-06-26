@@ -14,9 +14,9 @@ using AndroidX.Core.App;
 using AndroidX.Core.Content;
 using AndroidX.Fragment.App;
 using BarcodeScanner.Analysers;
+using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
 using BarcodeScanner.Models;
-using BarcodeScanner.Shared.Enums;
 using BarcodeScanner.Ui.Views;
 using Google.Common.Util.Concurrent;
 using Java.Lang;
@@ -29,6 +29,7 @@ using MResource = _Microsoft.Android.Resource.Designer.Resource;
 namespace BarcodeScanner;
 
 [Activity(Label = "BarcodeScannerActivity",
+          ScreenOrientation = ScreenOrientation.Portrait,
           ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
 public class BarcodeScannerActivity : FragmentActivity
 {
@@ -46,6 +47,8 @@ public class BarcodeScannerActivity : FragmentActivity
     private IBarcodeScanner? _barcodeScanner;
     private IActiveScannerOverlay? _activeOverlay;
     private IImageProxy? _latestImageProxy;
+    private BarcodeDetectionHandler? _detectionHandler;
+    private BarcodeScanningOptions _options;
 
     private bool _isFinishing;
     private bool _isContinuousScan;
@@ -54,6 +57,7 @@ public class BarcodeScannerActivity : FragmentActivity
     private int _delayBeforeAnalyze;
     private int _delayBeforeClose;
     private long _lastScanResultTime;
+    private volatile bool _isScanning = true;
     
     private readonly Matrix _tempMatrix = new();
     private readonly Dictionary<string, BarcodeBox> _lastBoxParams = new();
@@ -64,7 +68,7 @@ public class BarcodeScannerActivity : FragmentActivity
         SetContentView(MResource.Layout.activity_scan);
 
         _instanceId = Intent?.GetStringExtra("scanner_instance_id") ?? string.Empty;
-        if (string.IsNullOrEmpty(_instanceId))
+        if (string.IsNullOrWhiteSpace(_instanceId))
         {
             Log.Error("BarcodeScannerActivity", "CRITICAL ERROR: ScannerActivity launched without a valid InstanceId. Aborting to prevent Task hanging.");
             Finish();
@@ -83,14 +87,15 @@ public class BarcodeScannerActivity : FragmentActivity
 
         ActiveInstances[_instanceId] = new WeakReference<BarcodeScannerActivity>(this);
         
-        var options = MobileBarcodeScanner.GetOptions(_instanceId);
-        ApplyOptions(options);
+        _options = MobileBarcodeScanner.GetOptions(_instanceId);
         
-        SetupOverlay(root, options);
+        _detectionHandler = new BarcodeDetectionHandler(_options);
+        ApplyOptions(_options);
+        SetupOverlay(root, _options);
 
         if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Permission.Granted)
         {
-            SetupScanner(options);
+            SetupScanner(_options);
             SetupCamera();
         }
         else
@@ -125,7 +130,7 @@ public class BarcodeScannerActivity : FragmentActivity
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _isContinuousScan = options.ScannerMode == BarcodeScanningOptions.ScanType.Continuous;
+        _isContinuousScan = options.ScannerMode == ScanType.Continuous;
         _delayBeforeAnalyze = options.DelayBeforeAnalyzingFrames;
         _delayBeforeClose = options.DelayBeforeScannerClose;
         _delayBetweenFrames = options.DelayBetweenAnalyzingFrames;
@@ -277,16 +282,12 @@ public class BarcodeScannerActivity : FragmentActivity
 
         if (_barcodeScanner != null)
         {
-            var throttler = new FrameThrottler(_delayBeforeAnalyze,
-                                               _delayBetweenFrames);
             imageAnalysis.SetAnalyzer(
                                       ContextCompat.GetMainExecutor(this),
                                       new BarcodeAnalyzer(
                                                           _barcodeScanner,
-                                                          OnBarcodeFound,
-                                                          OnBarcodeVisualUpdate,
-                                                          IsInContinuousCooldown,
-                                                          throttler,
+                                                          OnBarcodesFound,
+                                                          _detectionHandler!.ShouldProcessFrame,
                                                           proxy => { _latestImageProxy = proxy; }));
         }
         else
@@ -297,139 +298,101 @@ public class BarcodeScannerActivity : FragmentActivity
         return imageAnalysis;
     }
 
-    private void OnBarcodeFound(Barcode? barcode)
+    private void OnBarcodesFound(List<Barcode> barcodes)
     {
-        if (barcode == null || string.IsNullOrWhiteSpace(_instanceId))
+        if (!_isScanning || _detectionHandler is null || _cameraPreview is null)
             return;
+        
+        var barcodeDataList = new List<BarcodeData>();
+        foreach (var barcode in barcodes)
+        {
+            if (string.IsNullOrWhiteSpace(barcode.RawValue)) 
+                continue; 
+            
+            var screenPoints = GetMappedPoints(barcode);
 
-        if (_isContinuousScan)
-        {
-            HandleBarcodeFoundInContinuousMode(barcode);
+            if (screenPoints is null) 
+                continue;
+            
+            var symbology = barcode.Format.ToLocalFormat();
+            barcodeDataList.Add(new BarcodeData(
+                                                barcode.RawValue,
+                                                barcode.DisplayValue,
+                                                symbology,
+                                                screenPoints));
         }
-        else
-        {
-            HandleBarcodeFoundInOneShotMode(barcode);
-        }
+        
+        var roiRectF = GetCurrentRoiRectF();
+        var roi = new RoiBounds(roiRectF.Left, roiRectF.Top, roiRectF.Right, roiRectF.Bottom);
+        
+        var currentTimeMs = SystemClock.ElapsedRealtime();
+        var result = _detectionHandler.Process(barcodeDataList, currentTimeMs, roi);
+        if (result is null) return;
+
+        HandleResult(result.Value);
     }
 
-    private void HandleBarcodeFoundInContinuousMode(Barcode barcode)
+    private RectF GetCurrentRoiRectF()
     {
-        var currentTime = SystemClock.ElapsedRealtime();
-        
-        if (IsInContinuousCooldown()) 
-            return;
-        
-        _lastScanResultTime = currentTime;
-        var result = new BarcodeResult
+        if (_options.RegionOfInterest.HasValue && _cameraPreview != null)
+            return _options.RegionOfInterest.Value.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
+
+        return _activeOverlay switch
         {
-            Status = ScanStatus.Success,
-            Symbology = barcode.Format.ToLocalFormat(),
-            RawValue = barcode.RawValue,
-            DisplayValue = barcode.DisplayValue,
-            ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            BarcodeScannerOverlayWithButtons defaultOverlay => defaultOverlay.GetViewfinderRect(),
+            BarcodeScannerOverlayView overlay => overlay.GetViewfinderRect(),
+            _ => new RectF(0, 0, _cameraPreview?.Width ?? 0, _cameraPreview?.Height ?? 0)
         };
-        MobileBarcodeScanner.DispatchContinuousResult(_instanceId, result);
+    }
+    
+    private void HandleResult(DetectionResult result)
+    {
+        if (result.ShouldResetOverlay)
+        {
+            RunOnUiThread(() => _activeOverlay?.ClearOverlay());
+            return;
+        }
+
+        var codeResult = new BarcodeResult
+        {
+            RawValue = result.RawValue,
+            DisplayValue = result.DisplayValue,
+            Symbology = result.Symbology,
+            ErrorMessage = null,
+            Status = ScanStatus.Success,
+            ScannedTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")
+        };
         
-        if (Looper.MainLooper != null) 
-            new Handler(Looper.MainLooper).PostDelayed(() =>
-            {
-                RunOnUiThread(() =>
+        switch (result.ScanType)
+        {
+            case ScanType.Continuous:
+                MobileBarcodeScanner.DispatchContinuousResult(_instanceId, codeResult);
+                new Handler(Looper.MainLooper).PostDelayed(() =>
                 {
-                    _activeOverlay?.ClearOverlay();
-                });
-            },_delayBeforeClose);
+                    RunOnUiThread(() =>
+                    {
+                        _activeOverlay?.ClearOverlay();
+                    });
+                }, _delayBeforeClose);
+                break;
+            case ScanType.OneShot:
+                _isScanning = false;
+                _isFinishing = true;
+                MobileBarcodeScanner.DispatchSingleResult(_instanceId, codeResult);
+                new Handler(Looper.MainLooper).PostDelayed(Finish, _delayBeforeClose);
+                break;
+        }
         
-    }
-    
-    private bool IsInContinuousCooldown()
-    {
-        if (!_isContinuousScan) 
-            return false;
-    
-        var currentTime = SystemClock.ElapsedRealtime();
-        return (currentTime - _lastScanResultTime) < _delayBetweenScans;
-    }
-    
-    private void HandleBarcodeFoundInOneShotMode(Barcode barcode)
-    {
-        if (_isFinishing)
-            return;
-        
-        _isFinishing = true;
-        
-        var result = new BarcodeResult
+        if (result.SmoothedPoints != null)
         {
-            Status = ScanStatus.Success,
-            Symbology = barcode.Format.ToLocalFormat(),
-            RawValue = barcode.RawValue,
-            DisplayValue = barcode.DisplayValue,
-            ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-        };
-        MobileBarcodeScanner.DispatchSingleResult(_instanceId, result);
-
-        if (Looper.MainLooper != null) 
-            new Handler(Looper.MainLooper).PostDelayed(Finish, _delayBeforeClose);
-    }
-
-    private void OnBarcodeVisualUpdate(Barcode? barcode)
-    {
-        if (barcode == null || _activeOverlay == null || string.IsNullOrWhiteSpace(barcode.RawValue)) 
-             return;
-
-        if (_isFinishing)
-            return;
-
-        var mappedPoints = GetMappedPoints(barcode);
-        if (mappedPoints == null)
-            return;
-
-        var box = GetBoundingBox(mappedPoints);
-        
-        ApplySmoothing(barcode, box);
-    }
-
-    private void ApplySmoothing(Barcode barcode, BarcodeBox box)
-    {
-        const float smoothFactorCenter = 0.15f;
-        const float smoothFactorSize = 0.3f;
-
-        var key = barcode.RawValue ?? "unknown";
-        lock (_lastBoxParams)
-        {
-            if (_lastBoxParams.TryGetValue(key, out var prev))
-            {
-                var dist = MathF.Sqrt((box.CenterX - prev.CenterX) * (box.CenterX - prev.CenterX) +
-                                      (box.CenterY - prev.CenterY) * (box.CenterY - prev.CenterY));
-                var maxDist = _cameraPreview?.Width * 0.3f ?? 0;
-                var offsetWhole = System.Math.Clamp(dist / maxDist, 0, 1);
-                var centerSmoothFactor = smoothFactorCenter + offsetWhole * 0.85f;
-
-                var scx = prev.CenterX + (box.CenterX - prev.CenterX) * centerSmoothFactor;
-                var scy = prev.CenterY + (box.CenterY - prev.CenterY) * centerSmoothFactor;
-                var sw = prev.Width + (box.Width - prev.Width) * smoothFactorSize;
-                var sh = prev.Height + (box.Height - prev.Height) * smoothFactorSize;
-
-                var result = new BarcodeBox(scx, scy, sw, sh);
-                _lastBoxParams[key] = result;
-
-                var rectPoints = result.ToRectPoints();
-
-                RunOnUiThread(() => { _activeOverlay?.UpdateOverlay(barcode.RawValue, rectPoints); });
-            }
-            else
-            {
-                _lastBoxParams[key] = box;
-                var rectPoints = box.ToRectPoints();
-                RunOnUiThread(() => { _activeOverlay?.UpdateOverlay(barcode.RawValue, rectPoints); });
-            }
+            RunOnUiThread(() => _activeOverlay?.UpdateOverlay(result.RawValue, result.SmoothedPoints));
         }
     }
-
+    
     private float[]? GetMappedPoints(Barcode barcode)
     {
         var points = barcode.GetCornerPoints();
-        if (points == null || points.Length < 4) 
-            return null;
+        if (points is null or {Length: < 4}) return null; 
          
         var srcPoints = new float[8];
         for (var i = 0; i < 4; i++)
@@ -448,35 +411,13 @@ public class BarcodeScannerActivity : FragmentActivity
         matrix.MapPoints(mappedPoints, srcPoints);
         return mappedPoints;
     }
-
-    private BarcodeBox GetBoundingBox(float[] mappedPoints)
-    {
-        float minX = float.MaxValue, minY = float.MaxValue;
-        float maxX = float.MinValue, maxY = float.MinValue;
-        for (var i = 0; i < 4; i++)
-        {
-            var x = mappedPoints[i * 2];
-            var y = mappedPoints[i * 2 + 1];
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-        }
-
-        var curCenterX = (minX + maxX) / 2f;
-        var curCenterY = (minY + maxY) / 2f;
-        var curWidth = maxX - minX;
-        var curHeight = maxY - minY;
-        
-        return new BarcodeBox(curCenterX, curCenterY, curWidth, curHeight);
-    }
-
+    
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
     {
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != CAMERA_REQUEST_CODE || grantResults.Length <= 0 || grantResults[0] != Permission.Granted)
         {
-            MobileBarcodeScanner.DispatchCancel(_instanceId);
+            MobileBarcodeScanner.DispatchError(_instanceId, "Camera permission is not granted.");
             Finish();
             return;
         }

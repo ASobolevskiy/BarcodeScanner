@@ -39,5 +39,5 @@ public partial class MobileBarcodeScanner
     
     private Activity GetCurrentActivity() => 
         MobileBarcodeScannerPlatform.GetCurrentActivity() 
-        ?? throw new InvalidOperationException("Не удалось получить текущую Activity.");
+        ?? throw new InvalidOperationException("Failed to get current Activity.");
 }

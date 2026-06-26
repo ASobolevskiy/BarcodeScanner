@@ -6,8 +6,8 @@ using Android.Runtime;
 using Android.Util;
 using Android.Views;
 using Android.Views.Animations;
+using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
-using BarcodeScanner.Shared.Enums;
 using Path = Android.Graphics.Path;
 
 namespace BarcodeScanner.Ui.Views;
@@ -25,7 +25,6 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     #endregion
 
     #region Static corners parameters
-
     private float _guideLengthPx;
     private float _staticWidthPx;
     private float _staticHeightPx;
@@ -33,13 +32,13 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     private readonly bool _showStaticGuides = true;
     private Paint _staticGuidesPaint;
     private Path? _staticGuidesPath;
-
     #endregion
 
     #region Active corners parameters
 
     private CornerPoints? _currentCorners;
     private CornerPoints? _targetCorners;
+    private CornerPoints? _startCorners;
     private ValueAnimator? _animator;
     private Paint _activeGuidesPaint;
 
@@ -119,8 +118,8 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
                                 top, 
                                 left + _staticWidthPx, 
                                 top + _staticHeightPx);
-        
-        _currentCorners ??= CornerPoints.FromRect(_staticRect);
+
+        _currentCorners ??= _staticRect.ToCornerPoints();
         _boundsDirty = true;
         BuildStaticGuidesPath();
     }
@@ -226,11 +225,13 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     #endregion
 
     #region Public API
+    public RectF GetViewfinderRect() => _staticRect ?? new RectF(0, 0, 0, 0);  
 
     public void ClearOverlay()
     {
         _currentCorners = null;
         _targetCorners = null;
+        _startCorners = null;
         _animator?.Cancel();
         _boundsDirty = true;
         PostInvalidate();
@@ -262,7 +263,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
             return;
         }
         
-        _currentCorners ??= CornerPoints.FromRect(_staticRect);
+        _startCorners = _currentCorners ?? _staticRect.ToCornerPoints();
         _targetCorners = CornerPoints.FromFloatArray(targetPoints);
 
         _animator = ValueAnimator.OfFloat(0f, 1f);
@@ -283,7 +284,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
         
         var progress = progressObj.FloatValue();
 
-        var start = _currentCorners ?? CornerPoints.FromRect(_staticRect);
+        var start = _startCorners ?? _staticRect.ToCornerPoints();
         var target = _targetCorners;
         if (!target.HasValue)
             return;

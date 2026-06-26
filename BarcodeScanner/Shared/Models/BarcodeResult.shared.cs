@@ -1,5 +1,5 @@
+using BarcodeScanner.Enums;
 using BarcodeScanner.Models;
-using BarcodeScanner.Shared.Enums;
 
 namespace BarcodeScanner.Models;
 

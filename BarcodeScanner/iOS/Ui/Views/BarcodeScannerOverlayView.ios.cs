@@ -1,5 +1,5 @@
 using System;
-using BarcodeScanner.Shared.Enums;
+using BarcodeScanner.Enums;
 using CoreAnimation;
 using CoreGraphics;
 using Foundation;
