@@ -30,7 +30,6 @@ public class MainViewController : UIViewController
         
         var scanner = new MobileBarcodeScanner();
         
-        
         scanOneShotButton.TouchUpInside += async (_, _) =>
         {
             var options = new BarcodeScanningOptions

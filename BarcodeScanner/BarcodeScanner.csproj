@@ -9,8 +9,6 @@
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="**\*.shared.cs"/>
-        <Compile Include="Android\Extensions\CornerPointsExtensions.cs" />
-        <Compile Include="Android\Extensions\RectFExtensions.cs" />
     </ItemGroup>
     <ItemGroup Condition="$(TargetFramework.EndsWith('android'))">
         <Compile Include="**\*.android.cs"/>

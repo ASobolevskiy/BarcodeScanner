@@ -80,4 +80,6 @@ public sealed class BarcodeScannerOverlayWithButtons : UIView, IActiveScannerOve
 
     public void UpdateOverlay(string? barcodeValue, float[] targetPoints) => 
         _drawingView.UpdateOverlay(barcodeValue, targetPoints);
+
+    public CGRect GetViewfinderRect() => _drawingView.GetViewfinderRect();
 }

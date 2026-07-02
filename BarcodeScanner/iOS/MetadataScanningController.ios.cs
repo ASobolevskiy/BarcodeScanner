@@ -18,6 +18,8 @@ public class MetadataScanningController(
     private static readonly ConcurrentDictionary<string, WeakReference<MetadataScanningController>> ActiveInstances =
         new();
 
+    private BarcodeScanningOptions _options;
+    private CGRect _roiRect;
     private UIView _overlayView;
     private IActiveScannerOverlay? _activeOverlay;
     private BarcodeDetectionHandler? _detectionHandler;
@@ -29,7 +31,6 @@ public class MetadataScanningController(
     private DispatchQueue? _metadataQueue;
 
     private bool _isFinishing;
-    private bool _isContinuousScan;
     private int _delayBeforeClose;
 
     private volatile bool _isScanning = true;
@@ -43,11 +44,11 @@ public class MetadataScanningController(
         view.BackgroundColor = UIColor.Black;
         ActiveInstances[instanceId] = new WeakReference<MetadataScanningController>(this);
 
-        var options = MobileBarcodeScanner.GetOptions(instanceId);
-        _detectionHandler = new BarcodeDetectionHandler(options);
-        ApplyOptions(options);
-        SetupOverlay(view, options);
-        SetupCamera(view, options);
+        _options = MobileBarcodeScanner.GetOptions(instanceId);
+        _detectionHandler = new BarcodeDetectionHandler(_options);
+        ApplyOptions(_options);
+        SetupOverlay(view, _options);
+        SetupCamera(view, _options);
     }
 
     public override void ViewDidLayoutSubviews()
@@ -56,6 +57,12 @@ public class MetadataScanningController(
         var view = View;
         if(view is null || _previewLayer is null) return;
         _previewLayer.Frame = view.Bounds;
+        view.LayoutIfNeeded();
+        var newRoi = GetRoiRect();
+        if (!_roiRect.Equals(newRoi))
+        {
+            _roiRect = newRoi;
+        }
     }
 
     public override void ViewWillDisappear(bool animated)
@@ -73,7 +80,6 @@ public class MetadataScanningController(
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _isContinuousScan = options.ScannerMode == ScanType.Continuous;
         _delayBeforeClose = options.DelayBeforeScannerClose;
     }
 
@@ -171,33 +177,78 @@ public class MetadataScanningController(
             return;
 
         var currentTimeMs = (long)(NSDate.Now.SecondsSinceReferenceDate * 1000.0);
-        var result = _detectionHandler.Process(metadataObjects, currentTimeMs, _previewLayer);
-
+        var barcodeDataList = new List<BarcodeData>();
+        if (metadataObjects is { Length: > 0 })
+        {
+            foreach (var metadataObject in metadataObjects)
+            {
+                if (metadataObject is AVMetadataMachineReadableCodeObject codeObject &&
+                    !string.IsNullOrWhiteSpace(codeObject.StringValue))
+                {
+                    var transformed = _previewLayer?.GetTransformedMetadataObject(codeObject) as AVMetadataMachineReadableCodeObject;
+                    var floatPoints = transformed?.Corners.ToFloatArray();
+                    if (floatPoints is { Length: 8 })
+                    {
+                        barcodeDataList.Add(new BarcodeData(
+                                                            codeObject.StringValue,
+                                                            codeObject.StringValue,
+                                                            codeObject.Type.ToLocalFormat(),
+                                                            floatPoints));
+                    }
+                }
+            }
+        }
+        
+        var roi = new RoiBounds((float)_roiRect.Left, (float)_roiRect.Top, (float)_roiRect.Right, (float)_roiRect.Bottom);
+        var result = _detectionHandler.Process(barcodeDataList, currentTimeMs, roi);
+        
         if (result is null) return;
         var value = result.Value;
 
-        if (value.ShouldResetOverlay)
+        HandleResult(value);
+    }
+
+    private void HandleResult(DetectionResult result)
+    {
+        if (result.ShouldResetOverlay)
         {
             DispatchQueue.MainQueue.DispatchAsync(() => _activeOverlay?.ClearOverlay());
             return;
         }
-
-        if (_isContinuousScan)
+        
+        if (result.ScanType == ScanType.Continuous)
         {
-            HandleBarcodeFoundInContinuousMode(value);
+            HandleBarcodeFoundInContinuousMode(result);
         }
         else
         {
-            HandleBarcodeFoundInOneShotMode(value);
+            HandleBarcodeFoundInOneShotMode(result);
         }
-
-        if (value.SmoothedPoints is not null)
+        
+        if (result.SmoothedPoints is not null)
         {
             DispatchQueue.MainQueue.DispatchAsync(() =>
             {
-                _activeOverlay?.UpdateOverlay(value.RawValue, value.SmoothedPoints);
+                _activeOverlay?.UpdateOverlay(result.RawValue, result.SmoothedPoints);
             });
         }
+    }
+
+    private CGRect GetRoiRect()
+    {
+        
+        var view = View;
+        if (view is null) 
+            return CGRect.Empty;
+        if(_options.RegionOfInterest.HasValue)
+            return _options.RegionOfInterest.Value.ToCgRect(view.Bounds.Width, view.Bounds.Height);
+
+        return _activeOverlay switch
+        {
+            BarcodeScannerOverlayWithButtons defaultOverlay => defaultOverlay.GetViewfinderRect(),
+            BarcodeScannerOverlayView overlay => overlay.GetViewfinderRect(),
+            _ => view.Bounds
+        };
     }
 
     private void HandleBarcodeFoundInContinuousMode(DetectionResult detectionResult)

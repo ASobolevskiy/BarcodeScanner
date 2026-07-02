@@ -49,7 +49,7 @@ internal sealed class BarcodeDetectionHandler(
         _lastScannedTimeMs = currentTimeMs;
         _lastSelectedBarcodeValue = barcodeData.RawValue;
         
-        var smoothedPoints = ApplySmoothing(barcodeData.RawValue, barcodeData.ScreenCornerPoints);
+        var smoothedPoints = ApplySmoothing(barcodeData.RawValue, barcodeData.ScreenCornerPoints, roi);
 
         return new DetectionResult
         {
@@ -117,9 +117,11 @@ internal sealed class BarcodeDetectionHandler(
         return x * x + y * y;
     }
     
-    private float[] ApplySmoothing(string key, float[] rawPoints)
+    private float[] ApplySmoothing(string key, float[] rawPoints, RoiBounds roi)
     {
-        // 1. Вычисляем сырой bounding box из 4 углов
+        var minWidth = Math.Max(roi.Width * 0.1f, 60f);
+        var minHeight = Math.Max(roi.Height * 0.1f, 60f);;
+        
         float minX = float.MaxValue, minY = float.MaxValue;
         float maxX = float.MinValue, maxY = float.MinValue;
         for (int i = 0; i < 8; i += 2)
@@ -131,21 +133,17 @@ internal sealed class BarcodeDetectionHandler(
 
         var curCenterX = (minX + maxX) * 0.5f;
         var curCenterY = (minY + maxY) * 0.5f;
-        var curWidth = maxX - minX;
-        var curHeight = maxY - minY;
+        var curWidth = Math.Max(maxX - minX, minWidth);
+        var curHeight = Math.Max(maxY - minY, minHeight);
 
         var currentBox = new BarcodeBox(curCenterX, curCenterY, curWidth, curHeight);
 
-        // 2. Сглаживаем (EMA)
 
         if (_lastBoxParams.TryGetValue(key, out var prevBox))
         {
-            // Адаптивный коэффициент для центра (как в старом коде)
             var dist = MathF.Sqrt((curCenterX - prevBox.CenterX) * (curCenterX - prevBox.CenterX) +
                                   (curCenterY - prevBox.CenterY) * (curCenterY - prevBox.CenterY));
             
-            // Примечание: здесь нам нужен примерный размер экрана для maxDist. 
-            // Можно использовать ширину самого кода как ориентир или зашить константу.
             var maxDist = curWidth * 1.5f; 
             var offsetWhole = Math.Clamp(dist / maxDist, 0f, 1f);
             var centerSmoothFactor = SMOOTH_FACTOR_CENTER + offsetWhole * 0.85f;
@@ -161,7 +159,6 @@ internal sealed class BarcodeDetectionHandler(
             return resultBox.ToRectPoints();
         }
 
-        // Первый кадр: просто сохраняем сырые параметры
         _lastBoxParams[key] = currentBox;
         return currentBox.ToRectPoints();
     }

@@ -19,13 +19,14 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
 
     private (CGRect frame, bool detected, float cornerLength) _cachedState;
     private CGPath? _cachedTl, _cachedTr, _cachedBl, _cachedBr;
+    private CGRect _currentViewfinderRect;
 
-    public UIColor DefaultColor { get; set; } = UIColor.White;
-    public UIColor DetectedColor { get; set; } = UIColor.SystemGreen;
-    public float StrokeWidth { get; set; } = 3.0f;
-    public float CornerLength { get; set; } = 24.0f;
-    public double AnimationDuration { get; set; } = 0.3;
-    public bool EnablePathCaching { get; set; } = true;
+    private readonly UIColor _defaultColor = UIColor.White;
+    private readonly UIColor _detectedColor = UIColor.SystemGreen;
+    private readonly float _strokeWidth = 3.0f;
+    private readonly float _cornerLength = 24.0f;
+    private readonly double _animationDuration = 0.3;
+    private readonly bool _enablePathCaching = true;
     
     public BarcodeScannerOverlayView()
     {
@@ -49,6 +50,7 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         return new CAShapeLayer
         {
             FillColor = UIColor.Clear.CGColor,
+            LineWidth = _strokeWidth,
             LineJoin = CAShapeLayer.JoinRound,
             LineCap = CAShapeLayer.CapRound,
             Frame = Bounds,
@@ -77,7 +79,7 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         _bottomRightLayer.Frame = Bounds;
     }
 
-    public void ResetToViewfinder()
+    private void ResetToViewfinder()
     {
         if (Bounds.IsEmpty)
             return;
@@ -92,9 +94,11 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         var x = (Bounds.Width - squareSize) / 2;
         var y = (Bounds.Height - squareSize) / 2;
         
-        var viewfinder = new CGRect(x, y, squareSize, squareSize);
-        UpdateCorners(viewfinder, animate: false, isDetected: false);
+        _currentViewfinderRect = new CGRect(x, y, squareSize, squareSize);
+        UpdateCorners(_currentViewfinderRect, animate: false, isDetected: false);
     }
+    
+    public CGRect GetViewfinderRect() => _currentViewfinderRect;
     
     public void ForceResetViewfinder()
     {
@@ -111,10 +115,10 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
             return;
         }
 
-        if (EnablePathCaching &&
+        if (_enablePathCaching &&
             _cachedState.frame == targetFrame &&
             _cachedState.detected == isDetected &&
-            _cachedState.cornerLength == CornerLength &&
+            _cachedState.cornerLength == _cornerLength &&
             _cachedTl != null)
         {
             ApplyCachedPaths(isDetected, animate);
@@ -126,13 +130,13 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         var blPath = CreateCornerPath(targetFrame, CornerType.BottomLeft);
         var brPath = CreateCornerPath(targetFrame, CornerType.BottomRight);
         
-        if (EnablePathCaching)
+        if (_enablePathCaching)
         {
             _cachedTl = tlPath;
             _cachedTr = trPath;
             _cachedBl = blPath;
             _cachedBr = brPath;
-            _cachedState = (targetFrame, isDetected, CornerLength);
+            _cachedState = (targetFrame, isDetected, _cornerLength);
         }
 
         ApplyPaths(tlPath, trPath, blPath, brPath, isDetected, animate);
@@ -149,9 +153,9 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         if (tl == null || tr == null || bl == null || br == null)
             return;
         
-        var targetColor = (isDetected ? DetectedColor : DefaultColor).CGColor;
+        var targetColor = (isDetected ? _detectedColor : _defaultColor).CGColor;
 
-        if (animate && AnimationDuration > 0)
+        if (animate && _animationDuration > 0)
         {
             AnimateLayer(_topLeftLayer, tl, targetColor);
             AnimateLayer(_topRightLayer, tr, targetColor);
@@ -183,7 +187,7 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         var y = (float)frame.Y;
         var w = (float)frame.Width;
         var h = (float)frame.Height;
-        var len = CornerLength;
+        var len = _cornerLength;
 
         switch (position)
         {
@@ -234,7 +238,7 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         var group = new CAAnimationGroup
         {
             Animations = [pathAnim, colorAnim],
-            Duration = AnimationDuration,
+            Duration = _animationDuration,
             TimingFunction = CAMediaTimingFunction.FromName(CAMediaTimingFunction.EaseInEaseOut),
             RemovedOnCompletion = true,
             FillMode = CAFillMode.Removed
