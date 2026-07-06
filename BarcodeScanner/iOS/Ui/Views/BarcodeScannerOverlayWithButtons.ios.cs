@@ -1,4 +1,5 @@
 using System;
+using BarcodeScanner.Models;
 using UIKit;
 
 namespace BarcodeScanner.Ui.Views;
@@ -81,5 +82,7 @@ public sealed class BarcodeScannerOverlayWithButtons : UIView, IActiveScannerOve
     public void UpdateOverlay(string? barcodeValue, float[] targetPoints) => 
         _drawingView.UpdateOverlay(barcodeValue, targetPoints);
 
-    public CGRect GetViewfinderRect() => _drawingView.GetViewfinderRect();
+    public ViewFinderRect GetViewfinderRect() => _drawingView.GetViewfinderRect();
+
+    public void SyncRegionOfInterest(RoiRect roi) => _drawingView.SyncRegionOfInterest(roi);
 }

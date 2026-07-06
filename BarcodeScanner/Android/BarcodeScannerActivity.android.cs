@@ -51,12 +51,7 @@ public class BarcodeScannerActivity : FragmentActivity
     private BarcodeScanningOptions _options;
 
     private bool _isFinishing;
-    private bool _isContinuousScan;
-    private int _delayBetweenScans;
-    private int _delayBetweenFrames;
-    private int _delayBeforeAnalyze;
     private int _delayBeforeClose;
-    private long _lastScanResultTime;
     private volatile bool _isScanning = true;
     
     private readonly Matrix _tempMatrix = new();
@@ -130,11 +125,7 @@ public class BarcodeScannerActivity : FragmentActivity
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _isContinuousScan = options.ScannerMode == ScanType.Continuous;
-        _delayBeforeAnalyze = options.DelayBeforeAnalyzingFrames;
         _delayBeforeClose = options.DelayBeforeScannerClose;
-        _delayBetweenFrames = options.DelayBetweenAnalyzingFrames;
-        _delayBetweenScans = options.DelayBetweenContinuousScans;
     }
     
     private void SetupOverlay(ConstraintLayout root, BarcodeScanningOptions options)
@@ -187,6 +178,18 @@ public class BarcodeScannerActivity : FragmentActivity
         constraintSet.Connect(overlayView.Id, ConstraintSet.End, ConstraintSet.ParentId, ConstraintSet.End);
 
         constraintSet.ApplyTo(root);
+        
+        if(options.RegionOfInterest is {IsValid: true} roi)
+            _activeOverlay?.SyncRegionOfInterest(roi);
+        
+        #if DEBUG
+        if (options.RegionOfInterest is { IsValid: true } && options.CustomOverlayFactory is not null)
+        {
+            Log.Warn("BarcodeScanner",
+                     "RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
+                     "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
+        }
+        #endif
     }
 
     private void SetupScanner(BarcodeScanningOptions options)
@@ -336,13 +339,10 @@ public class BarcodeScannerActivity : FragmentActivity
     {
         if (_options.RegionOfInterest.HasValue && _cameraPreview != null)
             return _options.RegionOfInterest.Value.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
-
-        return _activeOverlay switch
-        {
-            BarcodeScannerOverlayWithButtons defaultOverlay => defaultOverlay.GetViewfinderRect(),
-            BarcodeScannerOverlayView overlay => overlay.GetViewfinderRect(),
-            _ => new RectF(0, 0, _cameraPreview?.Width ?? 0, _cameraPreview?.Height ?? 0)
-        };
+        
+        return _activeOverlay is not null
+            ? _activeOverlay.GetViewfinderRect().ToRectF()
+            : new RectF(0, 0, _cameraPreview?.Width ?? 0, _cameraPreview?.Height ?? 0);
     }
     
     private void HandleResult(DetectionResult result)

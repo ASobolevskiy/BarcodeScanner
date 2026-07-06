@@ -119,6 +119,17 @@ public class MetadataScanningController(
         _overlayView.BottomAnchor.ConstraintEqualTo(parentView.BottomAnchor).Active = true;
         _overlayView.LeadingAnchor.ConstraintEqualTo(parentView.LeadingAnchor).Active = true;
         _overlayView.TrailingAnchor.ConstraintEqualTo(parentView.TrailingAnchor).Active = true;
+        
+        if(options.RegionOfInterest is {IsValid: true} roi)
+            _activeOverlay?.SyncRegionOfInterest(roi);
+        
+#if DEBUG
+        if (options.RegionOfInterest is { IsValid: true } && options.CustomOverlayFactory is not null)
+        {
+            Console.WriteLine("[BarcodeScanner] [WARN] RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
+                              "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
+        }
+#endif
     }
 
     private void SetupCamera(UIView parentView, BarcodeScanningOptions options)
@@ -243,12 +254,9 @@ public class MetadataScanningController(
         if(_options.RegionOfInterest.HasValue)
             return _options.RegionOfInterest.Value.ToCgRect(view.Bounds.Width, view.Bounds.Height);
 
-        return _activeOverlay switch
-        {
-            BarcodeScannerOverlayWithButtons defaultOverlay => defaultOverlay.GetViewfinderRect(),
-            BarcodeScannerOverlayView overlay => overlay.GetViewfinderRect(),
-            _ => view.Bounds
-        };
+        return _activeOverlay is not null
+            ? _activeOverlay.GetViewfinderRect().ToCgRect()
+            : view.Bounds;
     }
 
     private void HandleBarcodeFoundInContinuousMode(DetectionResult detectionResult)
@@ -258,7 +266,7 @@ public class MetadataScanningController(
             Status = ScanStatus.Success,
             Symbology = detectionResult.Symbology,
             RawValue = detectionResult.RawValue,
-            DisplayValue = detectionResult.RawValue,
+            DisplayValue = detectionResult.DisplayValue,
             ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
         
@@ -282,7 +290,7 @@ public class MetadataScanningController(
             Status = ScanStatus.Success,
             Symbology = detectionResult.Symbology,
             RawValue = detectionResult.RawValue,
-            DisplayValue = detectionResult.RawValue,
+            DisplayValue = detectionResult.DisplayValue,
             ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
         

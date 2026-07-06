@@ -1,5 +1,6 @@
 using System;
 using BarcodeScanner.Enums;
+using BarcodeScanner.Models;
 using CoreAnimation;
 using CoreGraphics;
 using Foundation;
@@ -20,6 +21,7 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
     private (CGRect frame, bool detected, float cornerLength) _cachedState;
     private CGPath? _cachedTl, _cachedTr, _cachedBl, _cachedBr;
     private CGRect _currentViewfinderRect;
+    private RoiRect _externalRoi;
 
     private readonly UIColor _defaultColor = UIColor.White;
     private readonly UIColor _detectedColor = UIColor.SystemGreen;
@@ -83,7 +85,16 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
     {
         if (Bounds.IsEmpty)
             return;
+
+        _currentViewfinderRect = _externalRoi is { IsValid: true } roi
+            ? roi.ToCgRect(Bounds.Width, Bounds.Height)
+            : ComputeDefaultCenteredRect();
         
+        UpdateCorners(_currentViewfinderRect, animate: false, isDetected: false);
+    }
+
+    private CGRect ComputeDefaultCenteredRect()
+    {
         const float paddingRatio = 0.15f;
         var padding = Math.Max(Bounds.Width, Bounds.Height) * paddingRatio;
         
@@ -94,12 +105,18 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         var x = (Bounds.Width - squareSize) / 2;
         var y = (Bounds.Height - squareSize) / 2;
         
-        _currentViewfinderRect = new CGRect(x, y, squareSize, squareSize);
-        UpdateCorners(_currentViewfinderRect, animate: false, isDetected: false);
+        return new CGRect(x, y, squareSize, squareSize);
     }
     
-    public CGRect GetViewfinderRect() => _currentViewfinderRect;
-    
+    public ViewFinderRect GetViewfinderRect() => _currentViewfinderRect.ToViewFinderRect();
+
+    public void SyncRegionOfInterest(RoiRect roi)
+    {
+        _externalRoi = roi;
+        if(!Bounds.IsEmpty)
+            ResetToViewfinder();
+    }
+
     public void ForceResetViewfinder()
     {
         _hasInitializedViewfinder = false;

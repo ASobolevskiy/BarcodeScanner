@@ -8,6 +8,7 @@ using Android.Views;
 using Android.Views.Animations;
 using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
+using BarcodeScanner.Models;
 using Path = Android.Graphics.Path;
 
 namespace BarcodeScanner.Ui.Views;
@@ -43,7 +44,8 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     private Paint _activeGuidesPaint;
 
     #endregion
-    
+
+    private RoiRect? _externalRoi;
     private float _cachedLeft, _cachedTop, _cachedRight, _cachedBottom;
     private bool _boundsDirty = true;
 
@@ -111,17 +113,29 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
     {
         base.OnSizeChanged(w, h, oldw, oldh);
-        
-        var left = (w - _staticWidthPx) / 2f;
-        var top = (h - _staticHeightPx) / 2f;
-        _staticRect = new RectF(left, 
-                                top, 
-                                left + _staticWidthPx, 
-                                top + _staticHeightPx);
+        ApplyLayout(w, h);
+    }
 
+    private void ApplyLayout(int w, int h)
+    {
+        _staticRect = _externalRoi is { IsValid: true } roi
+            ? roi.ToRectF(w, h)
+            : ComputeDefaultCenteredRect(w, h);
+        
         _currentCorners ??= _staticRect.ToCornerPoints();
         _boundsDirty = true;
         BuildStaticGuidesPath();
+    }
+
+    private RectF ComputeDefaultCenteredRect(int w, int h)
+    {
+        var left = (w - _staticWidthPx) / 2f;
+        var top = (h - _staticHeightPx) / 2f;
+        
+        return new RectF(left, 
+                         top, 
+                         left + _staticWidthPx, 
+                         top + _staticHeightPx);
     }
 
     protected override void OnDraw(Canvas canvas)
@@ -225,7 +239,19 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     #endregion
 
     #region Public API
-    public RectF GetViewfinderRect() => _staticRect ?? new RectF(0, 0, 0, 0);  
+    public ViewFinderRect GetViewfinderRect() =>
+        (_staticRect ?? new RectF(0, 0, 0, 0)).ToViewFinderRect();
+
+    public void SyncRegionOfInterest(RoiRect roi)
+    {
+        _externalRoi = roi;
+        if (Width <= 0 || Height <= 0) 
+            return;
+        
+        ApplyLayout(Width, Height);
+        PostInvalidate();
+    }
+    
 
     public void ClearOverlay()
     {

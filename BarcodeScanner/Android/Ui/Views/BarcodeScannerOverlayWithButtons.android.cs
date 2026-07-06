@@ -5,6 +5,7 @@ using Android.Graphics.Drawables;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
+using BarcodeScanner.Models;
 
 namespace BarcodeScanner.Ui.Views;
 
@@ -128,7 +129,9 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
         _drawingView.UpdateOverlay(barcodeValue, targetPoints);
     }
 
-    public RectF GetViewfinderRect() => _drawingView.GetViewfinderRect();
+    public ViewFinderRect GetViewfinderRect() => _drawingView.GetViewfinderRect();
+
+    public void SyncRegionOfInterest(RoiRect roi) => _drawingView.SyncRegionOfInterest(roi);
 
     #endregion
 }

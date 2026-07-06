@@ -72,8 +72,8 @@ internal sealed class BarcodeDetectionHandler(
             return candidates.OrderBy(c => c.Distance).First();
         
         var sticky = candidates.FirstOrDefault(c => 
-                                                   c.Data.DisplayValue == _lastSelectedBarcodeValue);
-        return sticky.Data.DisplayValue != null 
+                                                   c.Data.RawValue == _lastSelectedBarcodeValue);
+        return sticky.Data.RawValue != null 
             ? sticky 
             : candidates.OrderBy(c => c.Distance).First();
     }
@@ -84,7 +84,7 @@ internal sealed class BarcodeDetectionHandler(
 
         foreach (var code in codes)
         {
-            if (string.IsNullOrWhiteSpace(code.DisplayValue)) 
+            if (string.IsNullOrWhiteSpace(code.RawValue)) 
                 continue;
             
             var points = code.ScreenCornerPoints;
@@ -114,7 +114,7 @@ internal sealed class BarcodeDetectionHandler(
     {
         var x = (center.X - roi.CenterX) * (center.X - roi.CenterX);
         var y = (center.Y - roi.CenterY) * (center.Y - roi.CenterY);
-        return x * x + y * y;
+        return x + y;
     }
     
     private float[] ApplySmoothing(string key, float[] rawPoints, RoiBounds roi)
