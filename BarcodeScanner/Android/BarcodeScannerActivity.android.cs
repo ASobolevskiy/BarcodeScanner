@@ -105,7 +105,7 @@ public class BarcodeScannerActivity : FragmentActivity
 
     protected override void OnDestroy()
     {
-        _analysisExecutor.Shutdown();
+        _analysisExecutor?.Shutdown();
         _analysisExecutor = null;
         
         base.OnDestroy();
