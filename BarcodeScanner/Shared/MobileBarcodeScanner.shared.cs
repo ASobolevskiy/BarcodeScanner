@@ -10,8 +10,7 @@ namespace BarcodeScanner;
 
 public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 {
-    private static readonly ConcurrentDictionary<string, MobileBarcodeScanner> ActiveScanners = new();
-    private static readonly ConcurrentDictionary<string, BarcodeScanningOptions> OptionsRegistry = new();
+    private static readonly ConcurrentDictionary<string, ScannerRegistration> Registrations = new ();
     
     private readonly BarcodeScanningOptions _defaultOptions = new();
     private string InstanceId { get; } = Guid.NewGuid().ToString();
@@ -27,6 +26,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
+        CleanupOrphanedRegistrations();
         EnsureNotScanning();
         _singleScanTcs = new TaskCompletionSource<BarcodeResult?>();
         
@@ -47,6 +47,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         BarcodeScanningOptions? options, 
         Action<BarcodeResult?> onResult)
     {
+        CleanupOrphanedRegistrations();
         EnsureNotScanning();
         _cts = new CancellationTokenSource();
         _continuousScanTcs = new TaskCompletionSource<bool>();
@@ -146,36 +147,56 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     
     private void RegisterInstance(BarcodeScanningOptions options)
     {
-        ActiveScanners[InstanceId] = this;
-        OptionsRegistry[InstanceId] = options;
+        Registrations[InstanceId] = new ScannerRegistration(new WeakReference<MobileBarcodeScanner>(this),
+                                                            _singleScanTcs,
+                                                            _continuousScanTcs,
+                                                            options);
     }
     
     internal static void DispatchSingleResult(string instanceId, BarcodeResult result)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
         {
-            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchSingleResult вызван с пустым _instanceId.");
+            Debug.WriteLine("[BarcodeScanner] Error: DispatchSingleResult called with empty instanceId.");
             return;
         }
+
+        if (!Registrations.TryGetValue(instanceId, out var registration))
+            return;
         
-        if (ActiveScanners.TryRemove(instanceId, out var scanner)) 
+        if (registration.Scanner.TryGetTarget(out var scanner))
         {
             scanner.CompleteSingleScan(result);
         }
-        Cleanup(instanceId);
+        else
+        {
+            registration.SingleScanTcs?.TrySetCanceled();
+            registration.ContinuousScanTcs?.TrySetCanceled();
+        }
+            
+        Registrations.TryRemove(instanceId, out _);
     }
     
     internal static void DispatchContinuousResult(string instanceId, BarcodeResult result)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
         {
-            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchContinuousResult вызван с пустым _instanceId.");
+            Debug.WriteLine("[BarcodeScanner] Error: DispatchContinuousResult called with empty instanceId.");
             return;
         }
-        
-        if (ActiveScanners.TryGetValue(instanceId, out var scanner)) 
+
+        if (!Registrations.TryGetValue(instanceId, out var registration))
+            return;
+
+        if (registration.Scanner.TryGetTarget(out var scanner))
         {
             scanner.TriggerContinuousCallback(result);
+        }
+        else
+        {
+            registration.SingleScanTcs?.TrySetCanceled();
+            registration.ContinuousScanTcs?.TrySetCanceled();
+            Registrations.TryRemove(instanceId, out _);
         }
     }
 
@@ -183,41 +204,80 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     {
         if (string.IsNullOrWhiteSpace(instanceId))
         {
-            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchCancel вызван с пустым _instanceId.");
+            Debug.WriteLine("[BarcodeScanner] Error: DispatchCancel called with empty instanceId.");
             return;
         }
+
+        if (!Registrations.TryGetValue(instanceId, out var registration)) 
+            return;
         
-        if (ActiveScanners.TryRemove(instanceId, out var scanner))
+        if (registration.Scanner.TryGetTarget(out var scanner))
         {
             scanner.CompleteContinuousScan();
             scanner.CancelAllScans(ScanStatus.CancelledByUser);
         }
-        Cleanup(instanceId);
+        else
+        {
+            registration.SingleScanTcs?.TrySetCanceled();
+            registration.ContinuousScanTcs?.TrySetCanceled();
+        }
+        
+        Registrations.TryRemove(instanceId, out _);
     }
 
     internal static void DispatchError(string instanceId, string errorMessage)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
         {
-            Debug.WriteLine("[BarcodeScanner] ОШИБКА: DispatchError вызван с пустым _instanceId.");
+            Debug.WriteLine("[BarcodeScanner] Error: DispatchError called with empty instanceId.");
             return;
         }
 
-        if (ActiveScanners.TryRemove(instanceId, out var scanner))
+        if (!Registrations.TryGetValue(instanceId, out var registration)) 
+            return;
+        
+        if (registration.Scanner.TryGetTarget(out var scanner))
         {
             scanner.FailScan(errorMessage);
         }
-        Cleanup(instanceId);
+        else
+        {
+            registration.SingleScanTcs?.TrySetCanceled();
+            registration.ContinuousScanTcs?.TrySetCanceled();
+        }
+        
+        Registrations.TryRemove(instanceId, out _);
     }
 
-    private static void Cleanup(string instanceId)
+    internal static BarcodeScanningOptions GetOptions(string instanceId) =>
+        Registrations.TryGetValue(instanceId, out var registration)
+            ? registration.Options
+            : new BarcodeScanningOptions();
+
+    private static void CleanupOrphanedRegistrations()
     {
-        ActiveScanners.TryRemove(instanceId, out _);
-        OptionsRegistry.TryRemove(instanceId, out _);
+        var count = Registrations.Count;
+        if (count == 0) return;
+    
+        var orphanedKeys = new List<string>(count);
+    
+        foreach (var kvp in Registrations)
+        {
+            if (!kvp.Value.Scanner.TryGetTarget(out _))
+            {
+                orphanedKeys.Add(kvp.Key);
+            }
+        }
+    
+        foreach (var key in orphanedKeys)
+        {
+            if (!Registrations.TryRemove(key, out var registration)) 
+                continue;
+            
+            registration.SingleScanTcs?.TrySetCanceled();
+            registration.ContinuousScanTcs?.TrySetCanceled();
+        }
     }
-
-    internal static BarcodeScanningOptions GetOptions(string instanceId) => 
-        OptionsRegistry.TryGetValue(instanceId, out var options) ? options : new BarcodeScanningOptions();
     
     private partial Task<BarcodeResult?> PlatformScanSingleAsync();
     private partial Task PlatformScanContinuousAsync();
