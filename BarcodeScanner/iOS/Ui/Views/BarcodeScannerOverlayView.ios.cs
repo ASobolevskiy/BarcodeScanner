@@ -300,6 +300,8 @@ public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         DisposeCachedPaths();
 
         _disposed = true;
+        
+        base.Dispose(disposing);
     }
     
     private void RemoveLayerAnimations()

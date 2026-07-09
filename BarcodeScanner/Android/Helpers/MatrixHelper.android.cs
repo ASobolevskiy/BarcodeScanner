@@ -11,8 +11,7 @@ public static class MatrixHelper
         IImageProxy? imageProxy,
         PreviewView? previewView,
         LensFacing lensFacing = LensFacing.Back,
-        bool applyRotation = false,
-        Matrix? targetMatrix = null)
+        bool applyRotation = false)
     {
         if (imageProxy == null || previewView == null)
             return null;
@@ -40,7 +39,7 @@ public static class MatrixHelper
 
         var (offsetX, offsetY) = GetAxisOffsets(scaleType, viewWidth, viewHeight, rotatedWidth, rotatedHeight, scale);
 
-        var matrix = targetMatrix ?? new Matrix();
+        var matrix = new Matrix();
         matrix.Reset();
 
         if (applyRotation)

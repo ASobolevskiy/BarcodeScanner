@@ -1,14 +1,10 @@
-using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using AVFoundation;
 using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
 using BarcodeScanner.Models;
 using BarcodeScanner.Ui.Views;
 using CoreFoundation;
-using Foundation;
-using UIKit;
 
 namespace BarcodeScanner;
 
@@ -49,6 +45,8 @@ public class MetadataScanningController(
         ApplyOptions(_options);
         SetupOverlay(view, _options);
         SetupCamera(view, _options);
+        
+        DispatchQueue.MainQueue.DispatchAsync(() => _session?.StartRunning());
     }
 
     public override void ViewDidLayoutSubviews()
@@ -59,10 +57,10 @@ public class MetadataScanningController(
         _previewLayer.Frame = view.Bounds;
         view.LayoutIfNeeded();
         var newRoi = GetRoiRect();
-        if (!_roiRect.Equals(newRoi))
-        {
-            _roiRect = newRoi;
-        }
+        if (_roiRect.Equals(newRoi)) 
+            return;
+        _roiRect = newRoi;
+        UpdateRectOfInterest();
     }
 
     public override void ViewWillDisappear(bool animated)
@@ -124,7 +122,7 @@ public class MetadataScanningController(
             _activeOverlay?.SyncRegionOfInterest(roi);
         
 #if DEBUG
-        if (options.RegionOfInterest is { IsValid: true } && options.CustomOverlayFactory is not null)
+        if (options is { RegionOfInterest.IsValid: true, CustomOverlayFactory: not null })
         {
             Console.WriteLine("[BarcodeScanner] [WARN] RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
                               "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
@@ -179,7 +177,9 @@ public class MetadataScanningController(
         
         parentView.Layer.InsertSublayer(_previewLayer, 0);
         
-        _session.StartRunning();
+        UpdateRectOfInterest();
+        
+        //_session.StartRunning();
     }
 
     private void HandleDetectedCodes(AVMetadataObject[]? metadataObjects)
@@ -259,6 +259,14 @@ public class MetadataScanningController(
             : view.Bounds;
     }
 
+    private void UpdateRectOfInterest()
+    {
+        if (_previewLayer is null || _metadataOutput is null)
+            return;
+
+        _metadataOutput.RectOfInterest = _previewLayer.MapToMetadataOutputCoordinates(_roiRect);
+    }
+
     private void HandleBarcodeFoundInContinuousMode(DetectionResult detectionResult)
     {
         var result = new BarcodeResult
@@ -303,7 +311,7 @@ public class MetadataScanningController(
     
     private void SetTorchInternal(bool turnOn)
     {
-        if (_cameraDevice == null || !_cameraDevice.HasTorch) return;
+        if (_cameraDevice is not { HasTorch: true }) return;
 
         _cameraDevice.LockForConfiguration(out var error);
         if (error == null)

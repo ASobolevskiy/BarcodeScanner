@@ -15,7 +15,12 @@ internal sealed class BarcodeAnalyzer(
     Func<long, bool> shouldProcessFrame,
     Action<IImageProxy> onImageInfo) : Java.Lang.Object, ImageAnalysis.IAnalyzer
 {
+
+    private readonly BarcodeSuccessListener _successListener = new(onBarcodeDetected);
+    private readonly FailureListener _failureListener = new();
+    
     public Size? DefaultTargetResolution => null;
+    
     public void Analyze(IImageProxy? proxyImage)
     {
         if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
@@ -31,14 +36,15 @@ internal sealed class BarcodeAnalyzer(
         onImageInfo.Invoke(proxyImage);
         
         var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
-        
+
+        var completeListener = new CompleteListener(proxyImage.Close);
         scanner.Process(inputImage)
-               .AddOnSuccessListener(new BarcodeSuccessListener(onBarcodeDetected))
-               .AddOnFailureListener(new FailureListener())
-               .AddOnCompleteListener(new CompleteListener(proxyImage.Close));
+               .AddOnSuccessListener(_successListener)
+               .AddOnFailureListener(_failureListener)
+               .AddOnCompleteListener(completeListener);
     }
     
-    private class BarcodeSuccessListener(
+    private sealed class BarcodeSuccessListener(
         Action<List<Barcode>> onDetected) : Java.Lang.Object, IOnSuccessListener
     {
         public void OnSuccess(Java.Lang.Object? result)
@@ -58,13 +64,23 @@ internal sealed class BarcodeAnalyzer(
         }
     }
 
-    private class FailureListener : Java.Lang.Object, IOnFailureListener
+    private sealed class FailureListener : Java.Lang.Object, IOnFailureListener
     {
         public void OnFailure(Java.Lang.Exception e) { /* игнорируем */ }
     }
 
-    private class CompleteListener(Action action) : Java.Lang.Object, IOnCompleteListener
+    private sealed class CompleteListener(Action action) : Java.Lang.Object, IOnCompleteListener
     {
-        public void OnComplete(Android.Gms.Tasks.Task result) => action.Invoke();
+        public void OnComplete(Android.Gms.Tasks.Task result)
+        {
+            try
+            {
+                action.Invoke();
+            }
+            finally
+            {
+                Dispose();
+            }
+        }
     }
 }

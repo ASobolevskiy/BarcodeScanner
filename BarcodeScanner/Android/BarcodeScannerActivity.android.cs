@@ -20,6 +20,7 @@ using BarcodeScanner.Models;
 using BarcodeScanner.Ui.Views;
 using Google.Common.Util.Concurrent;
 using Java.Lang;
+using Java.Util.Concurrent;
 using Xamarin.Google.MLKit.Vision.BarCode;
 using Xamarin.Google.MLKit.Vision.Barcode.Common;
 using Exception = Java.Lang.Exception;
@@ -54,8 +55,7 @@ public class BarcodeScannerActivity : FragmentActivity
     private int _delayBeforeClose;
     private volatile bool _isScanning = true;
     
-    private readonly Matrix _tempMatrix = new();
-    private readonly Dictionary<string, BarcodeBox> _lastBoxParams = new();
+    private IExecutorService? _analysisExecutor;
     
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -77,6 +77,10 @@ public class BarcodeScannerActivity : FragmentActivity
                                                 "[BarcodeScanner] CRITICAL: Root ConstraintLayout with id 'scanner_container' not found in activity_scan.xml. " +
                                                 "Please ensure the library resources are correctly merged and the layout file has not been modified.");
         }
+
+        _analysisExecutor = Executors.NewSingleThreadExecutor() ??
+                            throw new
+                                InvalidOperationException("Failed to create analysis executor. This should never happen.");
         
         _cameraPreview = FindViewById<PreviewView>(MResource.Id.camera_preview);
 
@@ -101,6 +105,9 @@ public class BarcodeScannerActivity : FragmentActivity
 
     protected override void OnDestroy()
     {
+        _analysisExecutor.Shutdown();
+        _analysisExecutor = null;
+        
         base.OnDestroy();
         _cameraProvider?.UnbindAll();
         _barcodeScanner?.Dispose();
@@ -285,8 +292,7 @@ public class BarcodeScannerActivity : FragmentActivity
 
         if (_barcodeScanner != null)
         {
-            imageAnalysis.SetAnalyzer(
-                                      ContextCompat.GetMainExecutor(this),
+            imageAnalysis.SetAnalyzer(_analysisExecutor,
                                       new BarcodeAnalyzer(
                                                           _barcodeScanner,
                                                           OnBarcodesFound,
@@ -302,6 +308,11 @@ public class BarcodeScannerActivity : FragmentActivity
     }
 
     private void OnBarcodesFound(List<Barcode> barcodes)
+    {
+        RunOnUiThread(() => OnBarcodesFoundInternal(barcodes));
+    }
+
+    private void OnBarcodesFoundInternal(List<Barcode> barcodes)
     {
         if (!_isScanning || _detectionHandler is null || _cameraPreview is null)
             return;
@@ -402,8 +413,7 @@ public class BarcodeScannerActivity : FragmentActivity
         }
 
         var matrix = MatrixHelper.GetCorrectionMatrix(_latestImageProxy,
-                                                      _cameraPreview,
-                                                      targetMatrix: _tempMatrix);
+                                                      _cameraPreview);
         if (matrix == null)
             return null;
 
