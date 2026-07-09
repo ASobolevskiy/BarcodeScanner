@@ -20,11 +20,10 @@ internal sealed class BarcodeDetectionHandler(
     private long _lastScannedTimeMs;
     private string? _lastSelectedBarcodeValue;
     
-    public bool ShouldProcessFrame(long currentTimeMs) => _throttler.ShouldAnalyze(currentTimeMs);
+    public bool ShouldProcessFrame() => _throttler.ShouldAnalyze();
 
     public DetectionResult? Process(
         IEnumerable<BarcodeData> detectedBarcodes,
-        long currentTimeMs,
         RoiBounds roi)
     {
         var codesList = detectedBarcodes as IList<BarcodeData> ?? detectedBarcodes.ToList();
@@ -39,6 +38,7 @@ internal sealed class BarcodeDetectionHandler(
         var targetCode = SelectBestBarcode(codesList, roi);
         if (targetCode is null) return null;
 
+        var currentTimeMs = TimeHelper.GetCurrentTimeMs();
         if (_scanType == ScanType.Continuous && currentTimeMs - _lastScannedTimeMs < _delayBetweenScans)
             return null;
         

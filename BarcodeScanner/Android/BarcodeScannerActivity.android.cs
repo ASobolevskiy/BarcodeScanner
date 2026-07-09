@@ -339,8 +339,7 @@ public class BarcodeScannerActivity : FragmentActivity
         var roiRectF = GetCurrentRoiRectF();
         var roi = new RoiBounds(roiRectF.Left, roiRectF.Top, roiRectF.Right, roiRectF.Bottom);
         
-        var currentTimeMs = SystemClock.ElapsedRealtime();
-        var result = _detectionHandler.Process(barcodeDataList, currentTimeMs, roi);
+        var result = _detectionHandler.Process(barcodeDataList, roi);
         if (result is null) return;
 
         HandleResult(result.Value);

@@ -12,7 +12,7 @@ namespace BarcodeScanner.Analysers;
 internal sealed class BarcodeAnalyzer(
     IBarcodeScanner scanner,
     Action<List<Barcode>> onBarcodeDetected,
-    Func<long, bool> shouldProcessFrame,
+    Func<bool> shouldProcessFrame,
     Action<IImageProxy> onImageInfo) : Java.Lang.Object, ImageAnalysis.IAnalyzer
 {
 
@@ -26,8 +26,7 @@ internal sealed class BarcodeAnalyzer(
         if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
             return;
 
-        var currentTime = Android.OS.SystemClock.ElapsedRealtime();
-        if (!shouldProcessFrame(currentTime))
+        if (!shouldProcessFrame())
         {
             proxyImage.Close();
             return;

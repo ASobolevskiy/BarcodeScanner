@@ -7,8 +7,14 @@ internal class FrameThrottler(
     private long _startTime = -1;
     private long _lastAnalyzed;
 
-    public bool ShouldAnalyze(long currentTimeMs)
+    /// <summary>
+    /// Determines whether the current frame should be analyzed based on timing constraints.
+    /// Uses monotonic time from TimeHelper to avoid issues with system clock changes.
+    /// </summary>
+    public bool ShouldAnalyze()
     {
+        var currentTimeMs = TimeHelper.GetCurrentTimeMs();
+        
         if (_startTime == -1)
             _startTime = currentTimeMs;
         

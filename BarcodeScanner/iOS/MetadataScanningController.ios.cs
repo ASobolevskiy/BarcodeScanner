@@ -187,7 +187,6 @@ public class MetadataScanningController(
         if(!_isScanning || _detectionHandler is null)
             return;
 
-        var currentTimeMs = (long)(NSDate.Now.SecondsSinceReferenceDate * 1000.0);
         var barcodeDataList = new List<BarcodeData>();
         if (metadataObjects is { Length: > 0 })
         {
@@ -211,7 +210,7 @@ public class MetadataScanningController(
         }
         
         var roi = new RoiBounds((float)_roiRect.Left, (float)_roiRect.Top, (float)_roiRect.Right, (float)_roiRect.Bottom);
-        var result = _detectionHandler.Process(barcodeDataList, currentTimeMs, roi);
+        var result = _detectionHandler.Process(barcodeDataList, roi);
         
         if (result is null) return;
         var value = result.Value;
