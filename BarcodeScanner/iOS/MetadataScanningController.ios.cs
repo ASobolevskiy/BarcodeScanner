@@ -23,6 +23,7 @@ public class MetadataScanningController(
     private AVCaptureDevice? _cameraDevice;
     private AVCaptureMetadataOutput? _metadataOutput;
     private AVCaptureVideoPreviewLayer? _previewLayer;
+    private MetadataOutputDelegate? _metadataOutputDelegate;
     
     private DispatchQueue? _metadataQueue;
 
@@ -30,7 +31,7 @@ public class MetadataScanningController(
     private int _delayBeforeClose;
 
     private volatile bool _isScanning = true;
-    
+
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
@@ -68,6 +69,7 @@ public class MetadataScanningController(
         base.ViewWillDisappear(animated);
         _session?.StopRunning();
         _metadataOutput?.SetDelegate(null, null);
+        _metadataOutputDelegate = null;
         _previewLayer?.RemoveFromSuperLayer();
         
         ActiveInstances.TryRemove(instanceId, out _);
@@ -167,7 +169,9 @@ public class MetadataScanningController(
         _metadataOutput.MetadataObjectTypes = formats.ToBitmask();
         
         _metadataQueue = new DispatchQueue("metadataQueue");
-        _metadataOutput.SetDelegate(new MetadataOutputDelegate(HandleDetectedCodes), _metadataQueue);
+
+        _metadataOutputDelegate = new MetadataOutputDelegate(HandleDetectedCodes);
+        _metadataOutput.SetDelegate(_metadataOutputDelegate, _metadataQueue);
         
         _previewLayer = new AVCaptureVideoPreviewLayer(_session)
         {
