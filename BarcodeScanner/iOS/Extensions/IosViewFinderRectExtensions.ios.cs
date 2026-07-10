@@ -11,6 +11,9 @@ public static class IosViewFinderRectExtensions
 
     extension(ViewFinderRect rect)
     {
-        public CGRect ToCgRect() => new(rect.Left, rect.Top, rect.Right, rect.Bottom);
+        public CGRect ToCgRect() => new(rect.Left, 
+                                        rect.Top, 
+                                        rect.Right - rect.Left, 
+                                        rect.Bottom - rect.Top);
     }
 }

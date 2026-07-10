@@ -35,6 +35,7 @@ public class MainViewController : UIViewController
             var options = new BarcodeScanningOptions
             {
                 PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
+                RegionOfInterest = new RoiRect(0.6f, 0.6f, 0.9f, 0.9f)
             };
             var result = await scanner.ScanAsync(options);
             HandleBarcodeResult(result);

@@ -78,6 +78,21 @@ public class MetadataScanningController(
             MobileBarcodeScanner.DispatchCancel(instanceId);
     }
 
+    public override bool ShouldAutorotate()
+    {
+        return false;
+    }
+
+    public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations()
+    {
+        return UIInterfaceOrientationMask.Portrait;
+    }
+
+    public override UIInterfaceOrientation PreferredInterfaceOrientationForPresentation()
+    {
+        return UIInterfaceOrientation.Portrait;
+    }
+
     private void ApplyOptions(BarcodeScanningOptions options)
     {
         _delayBeforeClose = options.DelayBeforeScannerClose;
@@ -161,6 +176,8 @@ public class MetadataScanningController(
             return;
         }
         _session.AddOutput(_metadataOutput);
+        if (_metadataOutput.Connections is { Length: > 0 } && _metadataOutput.Connections[0] is { SupportsVideoOrientation: true} connection)
+            connection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
 
         var formats = options.PossibleFormats
                              .Select(f => f.ToMetadataType())
@@ -178,7 +195,10 @@ public class MetadataScanningController(
             VideoGravity = AVLayerVideoGravity.ResizeAspectFill,
             Frame = parentView.Bounds
         };
-        
+
+        if(_previewLayer.Connection is {SupportsVideoOrientation: true} previewConnection)
+            previewConnection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
+
         parentView.Layer.InsertSublayer(_previewLayer, 0);
         
         UpdateRectOfInterest();
