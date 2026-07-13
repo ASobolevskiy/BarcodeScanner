@@ -19,16 +19,6 @@ public partial class MobileBarcodeScanner
         GetCurrentActivity().StartActivity(intent);
         return _continuousScanTcs!.Task;
     }
-
-    private partial void PlatformCancelScan()
-    {
-        BarcodeScannerActivity.FinishByInstanceId(InstanceId);
-    }
-
-    private partial void PlatformSetTorch(bool torchOn)
-    {
-        BarcodeScannerActivity.SetTorchState(InstanceId, torchOn);
-    }
     
     private Intent CreateIntent()
     {

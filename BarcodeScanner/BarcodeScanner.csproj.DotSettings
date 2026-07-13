@@ -6,4 +6,5 @@
 	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=ios_005Ccore/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=ios_005Cextensions/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=shared/@EntryIndexedValue">True</s:Boolean>
-	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=shared_005Ccore/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>
+	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=shared_005Ccore/@EntryIndexedValue">True</s:Boolean>
+	<s:Boolean x:Key="/Default/CodeInspection/NamespaceProvider/NamespaceFoldersToSkip/=shared_005Cinterfaces/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

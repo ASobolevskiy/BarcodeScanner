@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Android;
 using Android.Content.PM;
 using Android.Graphics;
@@ -32,10 +31,8 @@ namespace BarcodeScanner;
 [Activity(Label = "BarcodeScannerActivity",
           ScreenOrientation = ScreenOrientation.Portrait,
           ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
-public class BarcodeScannerActivity : FragmentActivity
+public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 {
-    private static readonly ConcurrentDictionary<string, WeakReference<BarcodeScannerActivity>> ActiveInstances = new();
-    
     private const int CAMERA_REQUEST_CODE = 1001;
     private string _instanceId = string.Empty;
     
@@ -83,8 +80,8 @@ public class BarcodeScannerActivity : FragmentActivity
                                 InvalidOperationException("Failed to create analysis executor. This should never happen.");
         
         _cameraPreview = FindViewById<PreviewView>(MResource.Id.camera_preview);
-
-        ActiveInstances[_instanceId] = new WeakReference<BarcodeScannerActivity>(this);
+        
+        MobileBarcodeScanner.AttachPlatformSession(_instanceId, new AndroidScannerSession(new WeakReference<IScannerPlatform>(this)));
         
         _options = MobileBarcodeScanner.GetOptions(_instanceId);
         
@@ -109,25 +106,29 @@ public class BarcodeScannerActivity : FragmentActivity
         _analysisExecutor = null;
         
         base.OnDestroy();
-        _cameraProvider?.UnbindAll();
-        _barcodeScanner?.Dispose();
-        
-        if (_overlayView is { Parent: ViewGroup parent })
-        {
-            parent.RemoveView(_overlayView);
-            _overlayView.Dispose();
-        }
-        
-        if (!string.IsNullOrWhiteSpace(_instanceId))
-        {
-            ActiveInstances.TryRemove(_instanceId, out _);
-        }
 
-        if (_isFinishing) 
-            return;
-        
-        if(!string.IsNullOrWhiteSpace(_instanceId))
-            MobileBarcodeScanner.DispatchCancel(_instanceId);
+        try
+        {
+            _cameraProvider?.UnbindAll();
+            _barcodeScanner?.Dispose();
+
+            if (_overlayView is { Parent: ViewGroup parent })
+            {
+                parent.RemoveView(_overlayView);
+                _overlayView.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] Android cleanup error: {ex.Message}");
+        }
+        finally
+        {
+            if (!_isFinishing && !string.IsNullOrWhiteSpace(_instanceId))
+            {
+                MobileBarcodeScanner.DispatchCancel(_instanceId);
+            }
+        }
     }
 
     private void ApplyOptions(BarcodeScanningOptions options)
@@ -163,10 +164,7 @@ public class BarcodeScannerActivity : FragmentActivity
                 MobileBarcodeScanner.DispatchCancel(_instanceId);
                 Finish();
             };
-            overlayContainer.OnTorchToggle += (isOn) =>
-            {
-                SetTorchState(_instanceId, isOn);
-            };
+            overlayContainer.OnTorchToggle += SetTorch;
             
             overlayView = overlayContainer;
             _activeOverlay = overlayContainer;
@@ -444,33 +442,15 @@ public class BarcodeScannerActivity : FragmentActivity
         if(!string.IsNullOrWhiteSpace(_instanceId))
             MobileBarcodeScanner.DispatchCancel(_instanceId);
     }
-    
-    public static void FinishByInstanceId(string instanceId)
-    {
-        if (string.IsNullOrWhiteSpace(instanceId)) return;
 
-        if (ActiveInstances.TryGetValue(instanceId, out var weakRef) &&
-            weakRef.TryGetTarget(out var activity))
-        {
-            activity.RunOnUiThread(() =>
-            {
-                if (activity is { IsFinishing: false, IsDestroyed: false })
-                {
-                    activity.Finish();
-                }
-            });
-        }
+    public void CloseScanner()
+    {
+        if(!IsFinishing && !IsDestroyed)
+            RunOnUiThread(Finish);
     }
 
-    internal static void SetTorchState(string instanceId, bool turnTorchOn)
+    public void SetTorch(bool turnOn)
     {
-        if (string.IsNullOrWhiteSpace(instanceId))
-            return;
-
-        if (ActiveInstances.TryGetValue(instanceId, out var weakRef) &&
-            weakRef.TryGetTarget(out var activity))
-        {
-            activity.RunOnUiThread(() => activity?._cameraControl?.EnableTorch(turnTorchOn));
-        }
+        RunOnUiThread(() => _cameraControl?.EnableTorch(turnOn));
     }
 }

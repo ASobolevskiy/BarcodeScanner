@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using AVFoundation;
 using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
@@ -9,11 +8,8 @@ using CoreFoundation;
 namespace BarcodeScanner;
 
 public class MetadataScanningController(
-    string instanceId) : UIViewController
+    string instanceId) : UIViewController, IScannerPlatform
 {
-    private static readonly ConcurrentDictionary<string, WeakReference<MetadataScanningController>> ActiveInstances =
-        new();
-
     private BarcodeScanningOptions _options;
     private CGRect _roiRect;
     private UIView _overlayView;
@@ -39,7 +35,7 @@ public class MetadataScanningController(
         if (view is null) return;
         
         view.BackgroundColor = UIColor.Black;
-        ActiveInstances[instanceId] = new WeakReference<MetadataScanningController>(this);
+        MobileBarcodeScanner.AttachPlatformSession(instanceId, new IosScannerSession(new WeakReference<IScannerPlatform>(this)));
 
         _options = MobileBarcodeScanner.GetOptions(instanceId);
         _detectionHandler = new BarcodeDetectionHandler(_options);
@@ -67,31 +63,37 @@ public class MetadataScanningController(
     public override void ViewWillDisappear(bool animated)
     {
         base.ViewWillDisappear(animated);
-        _session?.StopRunning();
-        _metadataOutput?.SetDelegate(null, null);
-        _metadataOutputDelegate = null;
-        _previewLayer?.RemoveFromSuperLayer();
-        
-        ActiveInstances.TryRemove(instanceId, out _);
-        
-        if (!_isFinishing) 
-            MobileBarcodeScanner.DispatchCancel(instanceId);
+        if (_session is { } sessionToStop)
+        {
+            DispatchQueue.DefaultGlobalQueue.DispatchAsync(() =>
+            {
+                try
+                {
+                    sessionToStop.StopRunning();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            });
+        }
+
+        try
+        {
+            _metadataOutput?.SetDelegate(null, null);
+            _metadataOutputDelegate = null;
+            _previewLayer?.RemoveFromSuperLayer();
+        }
+        finally
+        {
+            if (!_isFinishing) 
+                MobileBarcodeScanner.DispatchCancel(instanceId);
+        }
     }
 
-    public override bool ShouldAutorotate()
-    {
-        return false;
-    }
-
-    public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations()
-    {
-        return UIInterfaceOrientationMask.Portrait;
-    }
-
-    public override UIInterfaceOrientation PreferredInterfaceOrientationForPresentation()
-    {
-        return UIInterfaceOrientation.Portrait;
-    }
+    public override bool ShouldAutorotate() => false;
+    public override UIInterfaceOrientationMask GetSupportedInterfaceOrientations() => UIInterfaceOrientationMask.Portrait;
+    public override UIInterfaceOrientation PreferredInterfaceOrientationForPresentation() => UIInterfaceOrientation.Portrait;
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
@@ -120,7 +122,7 @@ public class MetadataScanningController(
                 MobileBarcodeScanner.DispatchCancel(instanceId);
                 DismissViewController(true, null);
             };
-            defaultOverlay.OnTorchToggle += isOn => SetTorchState(instanceId, isOn);
+            defaultOverlay.OnTorchToggle += SetTorchInternal;
 
             overlay = defaultOverlay;
             _activeOverlay = defaultOverlay;
@@ -344,29 +346,45 @@ public class MetadataScanningController(
         }
     }
 
-    internal static void SetTorchState(string instanceId, bool isOn)
+    public void SetTorch(bool turnOn)
     {
-        if (string.IsNullOrWhiteSpace(instanceId)) return;
-        if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
-            && weakRef.TryGetTarget(out var controller))
-        {
-            controller.SetTorchInternal(isOn);
-        }
+        SetTorchInternal(turnOn);
     }
 
-    internal static void FinishByInstanceId(string instanceId)
+    public void CloseScanner()
     {
-        if (string.IsNullOrWhiteSpace(instanceId)) return;
-        if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
-            && weakRef.TryGetTarget(out var controller))
+        DispatchQueue.MainQueue.DispatchAsync(() =>
         {
-            DispatchQueue.MainQueue.DispatchAsync(() =>
+            if (!IsBeingDismissed)
             {
-                if (!controller.IsBeingDismissed) 
-                    controller.DismissViewController(true, null);
-            });
-        }
+                DismissViewController(true, null);
+            }
+        });
     }
+
+    // internal static void SetTorchState(string instanceId, bool isOn)
+    // {
+    //     if (string.IsNullOrWhiteSpace(instanceId)) return;
+    //     if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
+    //         && weakRef.TryGetTarget(out var controller))
+    //     {
+    //         controller.SetTorchInternal(isOn);
+    //     }
+    // }
+    //
+    // internal static void FinishByInstanceId(string instanceId)
+    // {
+    //     if (string.IsNullOrWhiteSpace(instanceId)) return;
+    //     if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
+    //         && weakRef.TryGetTarget(out var controller))
+    //     {
+    //         DispatchQueue.MainQueue.DispatchAsync(() =>
+    //         {
+    //             if (!controller.IsBeingDismissed) 
+    //                 controller.DismissViewController(true, null);
+    //         });
+    //     }
+    // }
     
     private class MetadataOutputDelegate(Action<AVMetadataObject[]>? callback) : AVCaptureMetadataOutputObjectsDelegate
     {

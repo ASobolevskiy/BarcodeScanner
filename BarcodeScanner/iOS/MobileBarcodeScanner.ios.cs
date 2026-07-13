@@ -22,16 +22,6 @@ public partial class MobileBarcodeScanner
         GetCurrentViewController().PresentViewController(controller, true, null);
         return _continuousScanTcs!.Task;
     }
-
-    private partial void PlatformCancelScan()
-    {
-        MetadataScanningController.FinishByInstanceId(InstanceId);
-    }
-
-    private partial void PlatformSetTorch(bool torchOn)
-    {
-        MetadataScanningController.SetTorchState(InstanceId, torchOn);
-    }
     
     private UIViewController GetCurrentViewController()
     {

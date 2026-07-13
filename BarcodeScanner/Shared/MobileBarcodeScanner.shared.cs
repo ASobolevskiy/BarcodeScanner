@@ -11,13 +11,14 @@ namespace BarcodeScanner;
 public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 {
     private static readonly ConcurrentDictionary<string, ScannerRegistration> Registrations = new ();
-    
     private readonly BarcodeScanningOptions _defaultOptions = new();
+    
     private string InstanceId { get; } = Guid.NewGuid().ToString();
     
     private TaskCompletionSource<BarcodeResult?>? _singleScanTcs;
-    private TaskCompletionSource<bool>? _continuousScanTcs;
+    private TaskCompletionSource? _continuousScanTcs;
     private Action<BarcodeResult?>? _continuousCallback;
+    
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenRegistration? _autoCloseRegistration;
     
@@ -26,13 +27,11 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
-        CleanupOrphanedRegistrations();
         EnsureNotScanning();
         _singleScanTcs = new TaskCompletionSource<BarcodeResult?>();
         
         var finalOptions = options ?? _defaultOptions;
         finalOptions.ScannerMode = ScanType.OneShot;
-        
         RegisterInstance(finalOptions);
 
         if (finalOptions is { UseAutoClose: true, AutoCloseDelaySeconds: > 0 })
@@ -40,60 +39,121 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             _autoCloseCts = new CancellationTokenSource(TimeSpan.FromSeconds(finalOptions.AutoCloseDelaySeconds));
             _autoCloseRegistration = _autoCloseCts.Token.Register(CancelByAutoClose);
         }
-        return PlatformScanSingleAsync();
+
+        try
+        {
+            return PlatformScanSingleAsync();
+        }
+        catch (Exception ex)
+        {
+            var tcs = Interlocked.Exchange(ref _singleScanTcs, null);
+            
+            var errorResult = new BarcodeResult 
+            { 
+                Status = ScanStatus.Error, 
+                ErrorMessage = $"Failed to start platform scanner: {ex.Message}" 
+            };
+
+            tcs?.TrySetResult(errorResult);
+            
+            Registrations.TryRemove(InstanceId, out _);
+            CleanupAutoClose();
+            
+            return tcs?.Task ?? Task.FromResult<BarcodeResult?>(errorResult);
+        }
     }
 
     public Task ScanContinuouslyAsync(
         BarcodeScanningOptions? options, 
         Action<BarcodeResult?> onResult)
     {
-        CleanupOrphanedRegistrations();
         EnsureNotScanning();
         _cts = new CancellationTokenSource();
-        _continuousScanTcs = new TaskCompletionSource<bool>();
+        _continuousScanTcs = new TaskCompletionSource();
         
         var finalOptions = options ?? _defaultOptions;
         finalOptions.ScannerMode = ScanType.Continuous;
-        
         RegisterInstance(finalOptions);
         
         _cts.Token.Register(CancelScan);
         _continuousCallback = onResult;
-        
-        return PlatformScanContinuousAsync();
+
+        try
+        {
+            return PlatformScanContinuousAsync();
+        }
+        catch (Exception ex)
+        {
+            var tcs = Interlocked.Exchange(ref _continuousScanTcs, null);
+            
+            var errorResult = new BarcodeResult 
+            { 
+                Status = ScanStatus.Error, 
+                ErrorMessage = $"Failed to start platform scanner: {ex.Message}" 
+            };
+
+            var callback = _continuousCallback;
+            callback?.Invoke(errorResult);
+
+            tcs?.TrySetResult();
+            
+            Registrations.TryRemove(InstanceId, out _);
+            CleanupAutoClose();
+
+            return tcs?.Task ?? Task.CompletedTask;
+        }
     }
 
     public void CancelScan()
     {
         CleanupAutoClose();
         CancelAllScans(ScanStatus.CancelledByUser);
-        PlatformCancelScan();
+
+        if (Registrations.TryGetValue(InstanceId, out var reg) && reg.PlatformSession is not null)
+        {
+            reg.PlatformSession.RequestCancel();
+        }
     }
 
     private void CancelByAutoClose()
     {
         CleanupAutoClose();
         CancelAllScans(ScanStatus.AutoClosed);
-        PlatformCancelScan();
+        
+        if (Registrations.TryGetValue(InstanceId, out var reg) && reg.PlatformSession is not null)
+        {
+            reg.PlatformSession.RequestCancel();
+        }
     }
 
     private void FailScan(string errorMessage)
     {
         CleanupAutoClose();
+        var errorResult = new BarcodeResult { Status = ScanStatus.Error, ErrorMessage = errorMessage };
+        
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
-        singleTcs?.TrySetResult(new BarcodeResult { Status = ScanStatus.Error, ErrorMessage = errorMessage });
+        singleTcs?.TrySetResult(errorResult);
         
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
-        contTcs?.TrySetResult(true);
+        var callback = _continuousCallback;
+        callback?.Invoke(errorResult);
         _continuousCallback = null;
+        contTcs?.TrySetResult();
         
-        PlatformCancelScan();
+        if (Registrations.TryGetValue(InstanceId, out var reg) && reg.PlatformSession is not null)
+        {
+            reg.PlatformSession.RequestCancel();
+        }
     }
 
     public void ToggleTorch()
     {
         _isTorchOn = !_isTorchOn;
-        PlatformSetTorch(_isTorchOn);
+        
+        if (Registrations.TryGetValue(InstanceId, out var reg) && reg.PlatformSession != null)
+        {
+            reg.PlatformSession.SetTorch(_isTorchOn);
+        }
     }
 
     private void EnsureNotScanning()
@@ -106,7 +166,8 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     private void TriggerContinuousCallback(BarcodeResult result)
     {
-        _continuousCallback?.Invoke(result);
+        var callback = _continuousCallback;
+        callback?.Invoke(result);
     }
 
     private void CompleteSingleScan(BarcodeResult result)
@@ -121,18 +182,19 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     {
         CleanupAutoClose();
         var tcs = Interlocked.Exchange(ref _continuousScanTcs, null);
-        tcs?.TrySetResult(true);
+        tcs?.TrySetResult();
         _continuousCallback = null;
     }
     
     private void CancelAllScans(ScanStatus reason)
     {
         CleanupAutoClose();
+        var cancelResult = new BarcodeResult { Status = reason };
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
-        singleTcs?.TrySetResult(new BarcodeResult { Status = reason });
+        singleTcs?.TrySetResult(cancelResult);
 
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
-        contTcs?.TrySetResult(true);
+        contTcs?.TrySetResult();
         
         _continuousCallback = null;
     }
@@ -147,10 +209,17 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     
     private void RegisterInstance(BarcodeScanningOptions options)
     {
-        Registrations[InstanceId] = new ScannerRegistration(new WeakReference<MobileBarcodeScanner>(this),
-                                                            _singleScanTcs,
-                                                            _continuousScanTcs,
-                                                            options);
+        Registrations[InstanceId] = new ScannerRegistration(this, null, options);
+    }
+
+    internal static void AttachPlatformSession(string instanceId, IPlatformScannerSession session)
+    {
+        while (Registrations.TryGetValue(instanceId, out var oldRegistration))
+        {
+            var newRegistration = oldRegistration with { PlatformSession = session };
+            if (Registrations.TryUpdate(instanceId, newRegistration, oldRegistration))
+                return;
+        }
     }
     
     internal static void DispatchSingleResult(string instanceId, BarcodeResult result)
@@ -161,20 +230,10 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryGetValue(instanceId, out var registration))
+        if (!Registrations.TryRemove(instanceId, out var registration))
             return;
         
-        if (registration.Scanner.TryGetTarget(out var scanner))
-        {
-            scanner.CompleteSingleScan(result);
-        }
-        else
-        {
-            registration.SingleScanTcs?.TrySetCanceled();
-            registration.ContinuousScanTcs?.TrySetCanceled();
-        }
-            
-        Registrations.TryRemove(instanceId, out _);
+        registration.Scanner.CompleteSingleScan(result);
     }
     
     internal static void DispatchContinuousResult(string instanceId, BarcodeResult result)
@@ -185,19 +244,10 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryGetValue(instanceId, out var registration))
+        if (!Registrations.TryRemove(instanceId, out var registration))
             return;
-
-        if (registration.Scanner.TryGetTarget(out var scanner))
-        {
-            scanner.TriggerContinuousCallback(result);
-        }
-        else
-        {
-            registration.SingleScanTcs?.TrySetCanceled();
-            registration.ContinuousScanTcs?.TrySetCanceled();
-            Registrations.TryRemove(instanceId, out _);
-        }
+        
+        registration.Scanner.TriggerContinuousCallback(result);
     }
 
     internal static void DispatchCancel(string instanceId)
@@ -208,21 +258,11 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryGetValue(instanceId, out var registration)) 
+        if (!Registrations.TryRemove(instanceId, out var registration)) 
             return;
         
-        if (registration.Scanner.TryGetTarget(out var scanner))
-        {
-            scanner.CompleteContinuousScan();
-            scanner.CancelAllScans(ScanStatus.CancelledByUser);
-        }
-        else
-        {
-            registration.SingleScanTcs?.TrySetCanceled();
-            registration.ContinuousScanTcs?.TrySetCanceled();
-        }
-        
-        Registrations.TryRemove(instanceId, out _);
+        registration.Scanner.CompleteContinuousScan();
+        registration.Scanner.CancelAllScans(ScanStatus.CancelledByUser);
     }
 
     internal static void DispatchError(string instanceId, string errorMessage)
@@ -233,54 +273,17 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryGetValue(instanceId, out var registration)) 
+        if (!Registrations.TryRemove(instanceId, out var registration)) 
             return;
         
-        if (registration.Scanner.TryGetTarget(out var scanner))
-        {
-            scanner.FailScan(errorMessage);
-        }
-        else
-        {
-            registration.SingleScanTcs?.TrySetCanceled();
-            registration.ContinuousScanTcs?.TrySetCanceled();
-        }
-        
-        Registrations.TryRemove(instanceId, out _);
+        registration.Scanner.FailScan(errorMessage);
     }
 
     internal static BarcodeScanningOptions GetOptions(string instanceId) =>
         Registrations.TryGetValue(instanceId, out var registration)
             ? registration.Options
             : new BarcodeScanningOptions();
-
-    private static void CleanupOrphanedRegistrations()
-    {
-        var count = Registrations.Count;
-        if (count == 0) return;
-    
-        var orphanedKeys = new List<string>(count);
-    
-        foreach (var kvp in Registrations)
-        {
-            if (!kvp.Value.Scanner.TryGetTarget(out _))
-            {
-                orphanedKeys.Add(kvp.Key);
-            }
-        }
-    
-        foreach (var key in orphanedKeys)
-        {
-            if (!Registrations.TryRemove(key, out var registration)) 
-                continue;
-            
-            registration.SingleScanTcs?.TrySetCanceled();
-            registration.ContinuousScanTcs?.TrySetCanceled();
-        }
-    }
     
     private partial Task<BarcodeResult?> PlatformScanSingleAsync();
     private partial Task PlatformScanContinuousAsync();
-    private partial void PlatformCancelScan();
-    private partial void PlatformSetTorch(bool torchOn);
 }
