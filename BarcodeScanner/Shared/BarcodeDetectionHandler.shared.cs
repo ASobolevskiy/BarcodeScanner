@@ -15,7 +15,9 @@ internal sealed class BarcodeDetectionHandler(
     private readonly int _delayBetweenScans = options.DelayBetweenContinuousScans;
     private readonly ScanType _scanType = options.ScannerMode;
     
-    private readonly ConcurrentDictionary<string, BarcodeBox> _lastBoxParams = new();
+    //private readonly ConcurrentDictionary<string, BarcodeBox> _lastBoxParams = new();
+    private BarcodeBox? _lastBox;
+    private string? _lastKey;
     
     private long _lastScannedTimeMs;
     private string? _lastSelectedBarcodeValue;
@@ -139,8 +141,10 @@ internal sealed class BarcodeDetectionHandler(
         var currentBox = new BarcodeBox(curCenterX, curCenterY, curWidth, curHeight);
 
 
-        if (_lastBoxParams.TryGetValue(key, out var prevBox))
+        //if (_lastBoxParams.TryGetValue(key, out var prevBox))
+        if(_lastKey == key && _lastBox.HasValue)
         {
+            var prevBox = _lastBox.Value;
             var dist = MathF.Sqrt((curCenterX - prevBox.CenterX) * (curCenterX - prevBox.CenterX) +
                                   (curCenterY - prevBox.CenterY) * (curCenterY - prevBox.CenterY));
             
@@ -154,12 +158,15 @@ internal sealed class BarcodeDetectionHandler(
             var sh = prevBox.Height + (curHeight - prevBox.Height) * SMOOTH_FACTOR_SIZE;
 
             var resultBox = new BarcodeBox(scx, scy, sw, sh);
-            _lastBoxParams[key] = resultBox;
+            //_lastBoxParams[key] = resultBox;
+            _lastBox = resultBox;
             
             return resultBox.ToRectPoints();
         }
 
-        _lastBoxParams[key] = currentBox;
+        //_lastBoxParams[key] = currentBox;
+        _lastBox = currentBox;
+        _lastKey = key;
         return currentBox.ToRectPoints();
     }
 }

@@ -244,7 +244,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryRemove(instanceId, out var registration))
+        if (!Registrations.TryGetValue(instanceId, out var registration))
             return;
         
         registration.Scanner.TriggerContinuousCallback(result);
