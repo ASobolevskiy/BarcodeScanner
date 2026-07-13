@@ -23,7 +23,6 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private CancellationTokenRegistration? _autoCloseRegistration;
     
     private bool _isTorchOn;
-    private CancellationTokenSource? _cts;
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
@@ -68,14 +67,12 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         Action<BarcodeResult?> onResult)
     {
         EnsureNotScanning();
-        _cts = new CancellationTokenSource();
         _continuousScanTcs = new TaskCompletionSource();
         
         var finalOptions = options ?? _defaultOptions;
         finalOptions.ScannerMode = ScanType.Continuous;
         RegisterInstance(finalOptions);
         
-        _cts.Token.Register(CancelScan);
         _continuousCallback = onResult;
 
         try
