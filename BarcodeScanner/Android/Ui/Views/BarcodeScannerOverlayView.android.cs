@@ -48,6 +48,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     private RoiRect? _externalRoi;
     private float _cachedLeft, _cachedTop, _cachedRight, _cachedBottom;
     private bool _boundsDirty = true;
+    private ITimeInterpolator? _interpolator;
 
     #region Ctors
 
@@ -106,6 +107,13 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
             StrokeCap = Paint.Cap.Round
         };
         _activeGuidesPaint.SetStyle(Paint.Style.Stroke);
+        
+        _interpolator = new AccelerateDecelerateInterpolator();
+        
+        _animator = ValueAnimator.OfFloat(0f, 1f);
+        _animator?.SetDuration(ANIMATION_DURATION_MS);
+        _animator?.SetInterpolator(_interpolator);
+        _animator?.Update += OnAnimatorUpdate;
     }
 
     #region Lifecycle
@@ -157,6 +165,9 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
     {
         base.OnDetachedFromWindow();
         _animator?.Cancel();
+        _animator?.Update -= OnAnimatorUpdate;
+        _animator?.Dispose();
+        _animator = null;
     }
 
     #endregion
@@ -260,7 +271,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
         _startCorners = null;
         _animator?.Cancel();
         _boundsDirty = true;
-        PostInvalidate();
+        Invalidate();
     }
 
     public void UpdateOverlay(string? barcodeValue, float[]? targetPoints)
@@ -273,29 +284,12 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
 
         if (_staticRect == null)
             return;
-
-        try
-        {
-            _animator?.Update -= OnAnimatorUpdate;
-            _animator?.Cancel();
-            _animator?.Dispose();
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
-        }
-        catch (Java.Lang.Exception)
-        {
-            return;
-        }
         
         _startCorners = _currentCorners ?? _staticRect.ToCornerPoints();
         _targetCorners = CornerPoints.FromFloatArray(targetPoints);
-
-        _animator = ValueAnimator.OfFloat(0f, 1f);
-        _animator?.SetDuration(ANIMATION_DURATION_MS);
-        _animator?.SetInterpolator(new AccelerateDecelerateInterpolator());
-        _animator?.Update += OnAnimatorUpdate;
+        
+        _animator?.Cancel();
+        _animator?.SetFloatValues(0f, 1f);
         _animator?.Start();
     }
     
@@ -305,10 +299,17 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
 
     private void OnAnimatorUpdate(object? sender, ValueAnimator.AnimatorUpdateEventArgs e)
     {
-        if (e.Animation.AnimatedValue is not Java.Lang.Float progressObj || _staticRect == null) 
+        if (_staticRect is null || _animator is null) 
+            return;
+
+        var currentTime = _animator.CurrentPlayTime;
+        var duration = _animator.Duration;
+        if (duration <= 0)
             return;
         
-        var progress = progressObj.FloatValue();
+        var rawProgress = (float)currentTime/duration;
+        var progress = _interpolator?.GetInterpolation(rawProgress) ?? rawProgress;
+        progress = Math.Clamp(progress, 0f, 1f);
 
         var start = _startCorners ?? _staticRect.ToCornerPoints();
         var target = _targetCorners;
@@ -316,7 +317,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
             return;
         _currentCorners = CornerPoints.Lerp(start, target.Value, progress);
         _boundsDirty = true;
-        PostInvalidate();
+        Invalidate();
     }
 
     #endregion
@@ -339,6 +340,7 @@ public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposabl
             _animator?.Cancel();
             _animator?.Update -= OnAnimatorUpdate;
             _animator?.Dispose();
+            _interpolator?.Dispose();
         }
         
         base.Dispose(disposing);

@@ -15,8 +15,8 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
     private const int BUTTON_MARGIN = 60;
     
     private BarcodeScannerOverlayView _drawingView;
-    private Button _btnBack;
-    private Button _btnTorch;
+    private Button? _btnBack;
+    private Button? _btnTorch;
     private int _buttonSizePx;
 
     private bool _isTorchOn;
@@ -66,7 +66,7 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
             BottomMargin = BUTTON_MARGIN,
             MarginStart = BUTTON_MARGIN
         };
-        _btnBack.Click += (s, e) => OnBackRequested?.Invoke();
+        _btnBack.Click += OnBtnBackClick;
         AddView(_btnBack, backParams);
         
         _btnTorch = CreateCircleButton("🔦");
@@ -76,15 +76,29 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
             BottomMargin = BUTTON_MARGIN,
             MarginEnd = BUTTON_MARGIN
         };
-        _btnTorch.Click += (s, e) => 
-        {
-            _isTorchOn = !_isTorchOn;
-            UpdateTorchButtonAppearance();
-            OnTorchToggle?.Invoke(_isTorchOn);
-        };
+        _btnTorch.Click += OnBtnTorchClick;
         AddView(_btnTorch, torchParams);
     }
-    
+
+    protected override void OnDetachedFromWindow()
+    {
+        base.OnDetachedFromWindow();
+        _btnBack.Click -= OnBtnBackClick;
+        _btnTorch.Click -= OnBtnTorchClick;
+    }
+
+    private void OnBtnBackClick(object? s, EventArgs e)
+    {
+        OnBackRequested?.Invoke();
+    }
+
+    private void OnBtnTorchClick(object? s, EventArgs e)
+    {
+        _isTorchOn = !_isTorchOn;
+        UpdateTorchButtonAppearance();
+        OnTorchToggle?.Invoke(_isTorchOn);
+    }
+
     private Button CreateCircleButton(string text)
     {
         return new Button(Context)
@@ -114,14 +128,14 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
     private void UpdateTorchButtonAppearance()
     {
         var colorHex = _isTorchOn ? "#CCFFFF00" : "#80000000";
-        _btnTorch.Background = CreateCircleBackground(colorHex);
+        _btnTorch?.Background = CreateCircleBackground(colorHex);
     }
 
     #region Public API
 
     public void ClearOverlay()
     {
-        _drawingView.ClearOverlay();
+        _drawingView?.ClearOverlay();
     }
 
     public void UpdateOverlay(string? barcodeValue, float[] targetPoints)
@@ -134,6 +148,19 @@ public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverl
     public void SyncRegionOfInterest(RoiRect roi) => _drawingView.SyncRegionOfInterest(roi);
 
     #endregion
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _btnBack?.Dispose();
+            _btnBack = null;
+            _btnTorch?.Dispose();
+            _btnTorch = null;
+            _drawingView.Dispose();
+        }
+        base.Dispose(disposing);
+    }
 }
 
 internal static class ViewExtensions

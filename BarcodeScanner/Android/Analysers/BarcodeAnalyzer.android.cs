@@ -11,43 +11,90 @@ namespace BarcodeScanner.Analysers;
 
 internal sealed class BarcodeAnalyzer(
     IBarcodeScanner scanner,
-    Action<List<Barcode>> onBarcodeDetected,
-    Func<bool> shouldProcessFrame,
-    Action<IImageProxy> onImageInfo) : Java.Lang.Object, ImageAnalysis.IAnalyzer
+    WeakReference<Action<List<Barcode>>> onBarcodeDetectedRef,
+    WeakReference<Func<bool>> shouldProcessFrameRef,
+    WeakReference<Action<IImageProxy>> onImageInfoRef)
+    : Java.Lang.Object, ImageAnalysis.IAnalyzer
 {
+    private readonly WeakReference<IBarcodeScanner> _scannerRef = new(scanner);
 
-    private readonly BarcodeSuccessListener _successListener = new(onBarcodeDetected);
+    private readonly BarcodeSuccessListener _successListener = new(onBarcodeDetectedRef);
     private readonly FailureListener _failureListener = new();
+
+    private volatile bool _isStopping;
+    private int _isDisposed;
     
     public Size? DefaultTargetResolution => null;
+
+    public void MarkAsDisposed()
+    {
+        _isStopping = true;
+    }
     
     public void Analyze(IImageProxy? proxyImage)
     {
+        if (_isStopping || _isDisposed == 1)
+        {
+            proxyImage?.Close();
+            return;
+        }
+        
         if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
             return;
 
-        if (!shouldProcessFrame())
+        if (!shouldProcessFrameRef.TryGetTarget(out var shouldProcess) || !shouldProcess())
         {
             proxyImage.Close();
             return;
         }
 
-        onImageInfo.Invoke(proxyImage);
+        if (onImageInfoRef.TryGetTarget(out var onImageInfo))
+        {
+            onImageInfo.Invoke(proxyImage);
+        }
         
         var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
 
-        var completeListener = new CompleteListener(proxyImage.Close);
-        scanner.Process(inputImage)
-               .AddOnSuccessListener(_successListener)
-               .AddOnFailureListener(_failureListener)
-               .AddOnCompleteListener(completeListener);
+        var completeListener = new CompleteListener(proxyImage);
+        
+        if (_scannerRef.TryGetTarget(out var scanner))
+        {
+            scanner.Process(inputImage)
+                   .AddOnSuccessListener(_successListener)
+                   .AddOnFailureListener(_failureListener)
+                   .AddOnCompleteListener(completeListener);
+        }
+        else
+        {
+            proxyImage.Close();
+        }
     }
-    
-    private sealed class BarcodeSuccessListener(
-        Action<List<Barcode>> onDetected) : Java.Lang.Object, IOnSuccessListener
+
+    protected override void Dispose(bool disposing)
     {
+        if (Interlocked.Exchange(ref _isDisposed, 1) == 1)
+            return;
+        _isStopping = true;
+        
+        if (disposing)
+        {
+            _successListener?.MarkAsDead();
+            _failureListener?.Dispose();
+        }
+        
+        base.Dispose(disposing);
+    }
+
+    private sealed class BarcodeSuccessListener(
+        WeakReference<Action<List<Barcode>>> onBarcodeDetectedRef) : Java.Lang.Object, IOnSuccessListener
+    {
+        private volatile bool _isDisposed;
+        
         public void OnSuccess(Java.Lang.Object? result)
         {
+            if (_isDisposed)
+                return;
+            
             var barcodes = new List<Barcode>();
             if (result is not JavaList list || list.Size() <= 0)
             {
@@ -58,27 +105,59 @@ internal sealed class BarcodeAnalyzer(
             {
                 if (list.Get(i) is Barcode barcode) barcodes.Add(barcode);
             }
-            
-            onDetected.Invoke(barcodes);
+
+            if (onBarcodeDetectedRef.TryGetTarget(out var onBarcodeDetected))
+            {
+                onBarcodeDetected.Invoke(barcodes);
+            }
+        }
+
+        internal void MarkAsDead()
+        {
+            _isDisposed = true;
         }
     }
 
     private sealed class FailureListener : Java.Lang.Object, IOnFailureListener
     {
-        public void OnFailure(Java.Lang.Exception e) { /* игнорируем */ }
+        private volatile bool _isDisposed;
+        
+        public void OnFailure(Java.Lang.Exception e)
+        {
+            if (_isDisposed)
+                return;
+        }
+        
+        internal void MarkAsDead()
+        {
+            _isDisposed = true;
+        }
     }
 
-    private sealed class CompleteListener(Action action) : Java.Lang.Object, IOnCompleteListener
+    private sealed class CompleteListener(IImageProxy? proxyImage) : Java.Lang.Object, IOnCompleteListener
     {
+        private volatile bool _isDisposed;
+
         public void OnComplete(Android.Gms.Tasks.Task result)
         {
+            if (_isDisposed)
+                return;
             try
             {
-                action.Invoke();
+                if (proxyImage is null) 
+                    return;
+                try
+                {
+                    proxyImage.Close();
+                }
+                catch (ObjectDisposedException)
+                {
+                    System.Diagnostics.Debug.WriteLine("Proxy image already disposed");
+                }
             }
             finally
             {
-                Dispose();
+                _isDisposed = true;
             }
         }
     }

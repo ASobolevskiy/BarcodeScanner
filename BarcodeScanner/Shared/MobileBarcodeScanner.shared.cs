@@ -186,9 +186,13 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private void CancelAllScans(ScanStatus reason)
     {
         CleanupAutoClose();
-        var cancelResult = new BarcodeResult { Status = reason };
+        
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
-        singleTcs?.TrySetResult(cancelResult);
+        if (singleTcs is not null)
+        {
+            var cancelResult = new BarcodeResult { Status = reason };
+            singleTcs.TrySetResult(cancelResult);
+        }
 
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         contTcs?.TrySetResult();
@@ -255,7 +259,9 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             return;
         }
 
-        if (!Registrations.TryRemove(instanceId, out var registration)) 
+        var removed = Registrations.TryRemove(instanceId, out var registration);
+        Debug.WriteLine($"[BarcodeScanner] DispatchCancel: InstanceId={instanceId}, Removed={removed}, Registrations={Registrations.Count}");
+        if (!removed) 
             return;
         
         registration.Scanner.CompleteContinuousScan();

@@ -18,7 +18,6 @@ using BarcodeScanner.Helpers;
 using BarcodeScanner.Models;
 using BarcodeScanner.Ui.Views;
 using Google.Common.Util.Concurrent;
-using Java.Lang;
 using Java.Util.Concurrent;
 using Xamarin.Google.MLKit.Vision.BarCode;
 using Xamarin.Google.MLKit.Vision.Barcode.Common;
@@ -41,6 +40,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     private ProcessCameraProvider? _cameraProvider;
     private ICameraControl? _cameraControl;
     private View? _overlayView;
+    private ConstraintLayout? _root;
     
     private IBarcodeScanner? _barcodeScanner;
     private IActiveScannerOverlay? _activeOverlay;
@@ -53,7 +53,18 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     private volatile bool _isScanning = true;
     
     private IExecutorService? _analysisExecutor;
+    private ImageAnalysis? _imageAnalysis;
+    private BarcodeScannerOverlayWithButtons? _overlayContainer;
+    private Handler? _singleShotHandler;
+    private Handler? _continuousHandler;
+    private BarcodeAnalyzer? _barcodeAnalyser;
+    private Preview? _previewUseCase;
+    private CameraProviderRunnable? _cameraProviderRunnable;
     
+    private Action<List<Barcode>>? _onBarcodeDetectedDelegate;
+    private Func<bool>? _shouldProcessFrameDelegate;
+    private Action<IImageProxy>? _onImageInfoDelegate;
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
@@ -67,8 +78,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             return;
         }
         
-        var root = FindViewById<ConstraintLayout>(MResource.Id.scanner_container);
-        if (root == null)
+        _root = FindViewById<ConstraintLayout>(MResource.Id.scanner_container);
+        if (_root == null)
         {
             throw new InvalidOperationException(
                                                 "[BarcodeScanner] CRITICAL: Root ConstraintLayout with id 'scanner_container' not found in activity_scan.xml. " +
@@ -82,12 +93,13 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         _cameraPreview = FindViewById<PreviewView>(MResource.Id.camera_preview);
         
         MobileBarcodeScanner.AttachPlatformSession(_instanceId, new AndroidScannerSession(new WeakReference<IScannerPlatform>(this)));
+        //LeakTracker.Track(this);
         
         _options = MobileBarcodeScanner.GetOptions(_instanceId);
         
         _detectionHandler = new BarcodeDetectionHandler(_options);
         ApplyOptions(_options);
-        SetupOverlay(root, _options);
+        SetupOverlay(_options);
 
         if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Permission.Granted)
         {
@@ -102,32 +114,155 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     protected override void OnDestroy()
     {
-        _analysisExecutor?.Shutdown();
-        _analysisExecutor = null;
+        System.Diagnostics.Debug
+              .WriteLine($"[BarcodeScanner] OnDestroy called for BarcodeScannerActivity instance {_instanceId}");
         
-        base.OnDestroy();
+        if (!string.IsNullOrWhiteSpace(_instanceId))
+        {
+            System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Calling Dispatch cancel");
+            MobileBarcodeScanner.DispatchCancel(_instanceId);
+        }
 
         try
         {
-            _cameraProvider?.UnbindAll();
-            _barcodeScanner?.Dispose();
-
-            if (_overlayView is { Parent: ViewGroup parent })
+            SafeCleanup("barcodeAnalyser.MarkAsDisposed", 
+                        () => _barcodeAnalyser?.MarkAsDisposed());
+            
+            SafeCleanup("imageAnalysis.ClearAnalyzer", 
+                        () => _imageAnalysis?.ClearAnalyzer());
+            
+            SafeCleanup("latestImageProxy", () => 
             {
-                parent.RemoveView(_overlayView);
-                _overlayView.Dispose();
-            }
+                _latestImageProxy?.Close();
+                _latestImageProxy?.Dispose(); 
+                _latestImageProxy = null; 
+            });
+            
+            SafeCleanup("cameraProvider.UnbindAll", 
+                        () => _cameraProvider?.UnbindAll());
+            
+            SafeCleanup("Clearing Preview SurfaceProvider", () => 
+            { 
+                _previewUseCase?.SetSurfaceProvider(ContextCompat.GetMainExecutor(this), null);
+                _previewUseCase?.Dispose();
+                _previewUseCase = null;
+            });
+            
+            SafeCleanup("Disposing MLKit.BarcodeScanner", () => 
+            { 
+                _barcodeScanner?.Dispose(); 
+                _barcodeScanner = null; 
+            });
+            
+            SafeCleanup("Disposing BarcodeAnalyzer", () =>
+            {
+                _barcodeAnalyser?.Dispose();
+                _barcodeAnalyser = null;
+            });
+            
+            SafeCleanup("Disposing PreviewView", () =>
+            {
+                if (_cameraPreview is {Parent: ViewGroup previewParent})
+                    previewParent.RemoveView(_cameraPreview);
+                _cameraPreview?.Dispose();
+                _cameraPreview = null;
+            });
+            
+            SafeCleanup($"Remove overlays from parent", () =>
+            {
+                if (_overlayView != null && _root != null)
+                {
+                    _root.RemoveView(_overlayView);
+                }
+                if (_overlayContainer is not null)
+                {
+                    _overlayContainer.OnBackRequested -= CancelScan;
+                    _overlayContainer.OnTorchToggle -= SetTorch;
+                }
+                _overlayView?.Dispose();
+                _overlayView = null;
+                _overlayContainer = null;
+            });
+            
+            SafeCleanup("Disposing Handlers", () =>
+            {
+                _singleShotHandler?.RemoveCallbacksAndMessages(null);
+                _singleShotHandler?.Dispose();
+                _singleShotHandler = null;
+                _continuousHandler?.RemoveCallbacksAndMessages(null);
+                _continuousHandler?.Dispose();
+                _continuousHandler = null;
+            });
+            
+            SafeCleanup("Cancelling camera future", () =>
+            {
+                _cameraProviderFuture?.Cancel(true);
+                _cameraProviderFuture?.Dispose();
+                _cameraProviderFuture = null; 
+            });
+            
+            SafeCleanup("Disposing camera provider runnable", () =>
+            {
+                _cameraProviderRunnable?.Dispose();
+                _cameraProviderRunnable = null; 
+            });
+            
+            SafeCleanup("Dispose camera control", () =>
+            {
+                _cameraControl?.Dispose();
+                _cameraControl = null;
+            });
+            
+            SafeCleanup("Dispose camera provider", () =>
+            {
+                _cameraProvider?.Dispose();
+                _cameraProvider = null;
+            });
+            
+            SafeCleanup("Dispose image analysis", () =>
+            {
+                _imageAnalysis?.Dispose();
+                _imageAnalysis = null;
+            });
+            
+            _detectionHandler = null;
+            _activeOverlay = null;
+            _options = null;
+            _root = null;
+            _onBarcodeDetectedDelegate = null;
+            _shouldProcessFrameDelegate = null;
+            _onImageInfoDelegate = null;
+            
+            System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Cleanup completed");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] Android cleanup error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
         }
         finally
         {
-            if (!_isFinishing && !string.IsNullOrWhiteSpace(_instanceId))
+            SafeCleanup("Analysis executor shutdown", () =>
             {
-                MobileBarcodeScanner.DispatchCancel(_instanceId);
-            }
+                _analysisExecutor?.ShutdownNow();
+                _analysisExecutor = null;
+            });
+            
+            System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Calling base.OnDestroy");
+            base.OnDestroy();
+        }
+    }
+
+    private void SafeCleanup(string step, Action action)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] Cleanup Step:{step}");
+            action.Invoke();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] Cleanup Step:{step} Error: {ex.Message}");
         }
     }
 
@@ -136,7 +271,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         _delayBeforeClose = options.DelayBeforeScannerClose;
     }
     
-    private void SetupOverlay(ConstraintLayout root, BarcodeScanningOptions options)
+    private void SetupOverlay(BarcodeScanningOptions options)
     {
         View? overlayView;
         if (options.CustomOverlayFactory != null)
@@ -156,33 +291,28 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         }
         else
         {
-            var overlayContainer = new BarcodeScannerOverlayWithButtons(this);
+            _overlayContainer = new BarcodeScannerOverlayWithButtons(this);
 
-            overlayContainer.OnBackRequested += () =>
-            {
-                _isFinishing = true;
-                MobileBarcodeScanner.DispatchCancel(_instanceId);
-                Finish();
-            };
-            overlayContainer.OnTorchToggle += SetTorch;
+            _overlayContainer.OnBackRequested += CancelScan;
+            _overlayContainer.OnTorchToggle += SetTorch;
             
-            overlayView = overlayContainer;
-            _activeOverlay = overlayContainer;
+            overlayView = _overlayContainer;
+            _activeOverlay = _overlayContainer;
         }
         
         _overlayView = overlayView;
         overlayView.Id = View.GenerateViewId();
 
-        root.AddView(overlayView);
+        _root?.AddView(overlayView);
         var constraintSet = new ConstraintSet();
-        constraintSet.Clone(root);
+        constraintSet.Clone(_root);
             
         constraintSet.Connect(overlayView.Id, ConstraintSet.Top, ConstraintSet.ParentId, ConstraintSet.Top);
         constraintSet.Connect(overlayView.Id, ConstraintSet.Bottom, ConstraintSet.ParentId, ConstraintSet.Bottom);
         constraintSet.Connect(overlayView.Id, ConstraintSet.Start, ConstraintSet.ParentId, ConstraintSet.Start);
         constraintSet.Connect(overlayView.Id, ConstraintSet.End, ConstraintSet.ParentId, ConstraintSet.End);
 
-        constraintSet.ApplyTo(root);
+        constraintSet.ApplyTo(_root);
         
         if(options.RegionOfInterest is {IsValid: true} roi)
             _activeOverlay?.SyncRegionOfInterest(roi);
@@ -205,7 +335,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
                                 .ToArray();
         int firstFormat;
         int[] otherFormats;
-
+        
         if (mlFormats.Length == 0 || mlFormats.Contains(Barcode.FormatAllFormats))
         {
             firstFormat = Barcode.FormatAllFormats;
@@ -216,7 +346,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             firstFormat = mlFormats[0];
             otherFormats = mlFormats.Skip(1).ToArray();
         }
-
+        
         var mlOptions = new BarcodeScannerOptions.Builder()
                         .SetBarcodeFormats(firstFormat, otherFormats)
                         .Build();
@@ -229,12 +359,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             return;
         
         _cameraProviderFuture = ProcessCameraProvider.GetInstance(this);
-        _cameraProviderFuture?.AddListener(new Runnable(SetupCameraProvider),
+        _cameraProviderRunnable = new CameraProviderRunnable(new WeakReference<BarcodeScannerActivity>(this));
+        _cameraProviderFuture?.AddListener(_cameraProviderRunnable,
                                            ContextCompat.GetMainExecutor(this));
     }
 
     private void SetupCameraProvider()
     {
+        if (IsDestroyed || IsFinishing) return;
         try
         {
             _cameraProvider = _cameraProviderFuture?.Get() as ProcessCameraProvider;
@@ -253,16 +385,16 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private void BindCameraUseCases(ProcessCameraProvider cameraProvider)
     {
-        var preview = CreatePreviewUseCase();
+        _previewUseCase = CreatePreviewUseCase();
         var cameraSelector = CreateCameraSelector();
-        var imageAnalysis = CreateImageAnalysisUseCase();
+        _imageAnalysis = CreateImageAnalysisUseCase();
         
         cameraProvider.UnbindAll();
-        var camera = cameraProvider.BindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+        var camera = cameraProvider.BindToLifecycle(this, cameraSelector, _previewUseCase, _imageAnalysis);
         _cameraControl = camera.CameraControl;
     }
         
-    private Preview CreatePreviewUseCase()
+    private Preview CreatePreviewUseCase()  
     {
         var preview = new Preview.Builder().Build() ?? throw new NullReferenceException("Не удалось создать Preview");
         preview.SetSurfaceProvider(ContextCompat.GetMainExecutor(this), _cameraPreview?.SurfaceProvider);
@@ -290,12 +422,16 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
         if (_barcodeScanner != null)
         {
+            _onBarcodeDetectedDelegate = OnBarcodesFound;
+            _shouldProcessFrameDelegate = _detectionHandler!.ShouldProcessFrame;
+            _onImageInfoDelegate = proxy => _latestImageProxy = proxy;
+            
+            _barcodeAnalyser = new BarcodeAnalyzer(_barcodeScanner,
+                                                   new WeakReference<Action<List<Barcode>>>(_onBarcodeDetectedDelegate),
+                                                   new WeakReference<Func<bool>>(_shouldProcessFrameDelegate),
+                                                   new WeakReference<Action<IImageProxy>>(_onImageInfoDelegate));
             imageAnalysis.SetAnalyzer(_analysisExecutor,
-                                      new BarcodeAnalyzer(
-                                                          _barcodeScanner,
-                                                          OnBarcodesFound,
-                                                          _detectionHandler!.ShouldProcessFrame,
-                                                          proxy => { _latestImageProxy = proxy; }));
+                                      _barcodeAnalyser);
         }
         else
         {
@@ -312,7 +448,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private void OnBarcodesFoundInternal(List<Barcode> barcodes)
     {
-        if (!_isScanning || _detectionHandler is null || _cameraPreview is null)
+        if (!_isScanning || _isFinishing || _detectionHandler is null || _cameraPreview is null)
             return;
         
         var barcodeDataList = new List<BarcodeData>();
@@ -375,7 +511,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             case ScanType.Continuous:
                 MobileBarcodeScanner.DispatchContinuousResult(_instanceId, codeResult);
-                new Handler(Looper.MainLooper).PostDelayed(() =>
+                _continuousHandler = new Handler(Looper.MainLooper);
+                _continuousHandler.PostDelayed(() =>
                 {
                     RunOnUiThread(() =>
                     {
@@ -387,7 +524,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
                 _isScanning = false;
                 _isFinishing = true;
                 MobileBarcodeScanner.DispatchSingleResult(_instanceId, codeResult);
-                new Handler(Looper.MainLooper).PostDelayed(Finish, _delayBeforeClose);
+                _singleShotHandler = new Handler(Looper.MainLooper);
+                _singleShotHandler.PostDelayed(Finish, _delayBeforeClose);
                 break;
         }
         
@@ -438,9 +576,9 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     public override void OnBackPressed()
     {
-        base.OnBackPressed();
         if(!string.IsNullOrWhiteSpace(_instanceId))
             MobileBarcodeScanner.DispatchCancel(_instanceId);
+        base.OnBackPressed();
     }
 
     public void CloseScanner()
@@ -452,5 +590,27 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     public void SetTorch(bool turnOn)
     {
         RunOnUiThread(() => _cameraControl?.EnableTorch(turnOn));
+    }
+
+    private void CancelScan()
+    {
+        _isFinishing = true;
+        MobileBarcodeScanner.DispatchCancel(_instanceId);
+        Finish();
+    }
+    
+    private sealed class CameraProviderRunnable(WeakReference<BarcodeScannerActivity> activityRef)
+        : Java.Lang.Object, Java.Lang.IRunnable
+    {
+        public void Run()
+        {
+            if (!activityRef.TryGetTarget(out var activity))
+                return;
+                
+            if (activity.IsDestroyed || activity.IsFinishing)
+                return;
+                
+            activity.SetupCameraProvider();
+        }
     }
 }

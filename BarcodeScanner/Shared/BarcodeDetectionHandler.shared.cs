@@ -14,8 +14,8 @@ internal sealed class BarcodeDetectionHandler(
                                                      options.DelayBetweenAnalyzingFrames);
     private readonly int _delayBetweenScans = options.DelayBetweenContinuousScans;
     private readonly ScanType _scanType = options.ScannerMode;
-    
-    //private readonly ConcurrentDictionary<string, BarcodeBox> _lastBoxParams = new();
+
+    private readonly List<(BarcodeData Data, float Distance)> _candidatesBuffer = [];
     private BarcodeBox? _lastBox;
     private string? _lastKey;
     
@@ -25,19 +25,17 @@ internal sealed class BarcodeDetectionHandler(
     public bool ShouldProcessFrame() => _throttler.ShouldAnalyze();
 
     public DetectionResult? Process(
-        IEnumerable<BarcodeData> detectedBarcodes,
+        IList<BarcodeData> detectedBarcodes,
         RoiBounds roi)
     {
-        var codesList = detectedBarcodes as IList<BarcodeData> ?? detectedBarcodes.ToList();
-
-        if (codesList.Count is 0)
+        if (detectedBarcodes.Count is 0)
         {
             _lastScannedTimeMs = 0;
             _lastSelectedBarcodeValue = null;
             return new DetectionResult { ShouldResetOverlay = true };
         }
 
-        var targetCode = SelectBestBarcode(codesList, roi);
+        var targetCode = SelectBestBarcode(detectedBarcodes, roi);
         if (targetCode is null) return null;
 
         var currentTimeMs = TimeHelper.GetCurrentTimeMs();
@@ -65,25 +63,26 @@ internal sealed class BarcodeDetectionHandler(
     
     private (BarcodeData Data, float Distance)? SelectBestBarcode(IList<BarcodeData> codes, RoiBounds roi)
     {
-        var candidates = GetCandidates(codes, roi);
+        _candidatesBuffer.Clear();
+        GetCandidates(codes, roi);
 
-        if (candidates.Count == 0) 
+        if (_candidatesBuffer.Count == 0) 
             return null;
 
         if(string.IsNullOrWhiteSpace(_lastSelectedBarcodeValue)) 
-            return candidates.OrderBy(c => c.Distance).First();
+            return FindMinByDistance();
         
-        var sticky = candidates.FirstOrDefault(c => 
-                                                   c.Data.RawValue == _lastSelectedBarcodeValue);
-        return sticky.Data.RawValue != null 
-            ? sticky 
-            : candidates.OrderBy(c => c.Distance).First();
+        for (var i = 0; i < _candidatesBuffer.Count; i++)
+        {
+            if (_candidatesBuffer[i].Data.RawValue == _lastSelectedBarcodeValue)
+                return _candidatesBuffer[i];
+        }
+        
+        return FindMinByDistance();
     }
 
-    private static List<(BarcodeData Data, float Distance)> GetCandidates(IList<BarcodeData> codes, RoiBounds roi)
+    private void GetCandidates(IList<BarcodeData> codes, RoiBounds roi)
     {
-        var candidates = new List<(BarcodeData Data, float Distance)>();
-
         foreach (var code in codes)
         {
             if (string.IsNullOrWhiteSpace(code.RawValue)) 
@@ -98,10 +97,19 @@ internal sealed class BarcodeDetectionHandler(
                 continue;
             
             var distSq = CalculateDistance(center, roi);
-            candidates.Add((code, distSq));
+            _candidatesBuffer.Add((code, distSq));
         }
-
-        return candidates;
+    }
+    
+    private (BarcodeData Data, float Distance) FindMinByDistance()
+    {
+        var min = _candidatesBuffer[0];
+        for (var i = 1; i < _candidatesBuffer.Count; i++)
+        {
+            if (_candidatesBuffer[i].Distance < min.Distance)
+                min = _candidatesBuffer[i];
+        }
+        return min;
     }
     
     private static (float X, float Y) GetBarcodeCenter(float[] points)
@@ -139,9 +147,7 @@ internal sealed class BarcodeDetectionHandler(
         var curHeight = Math.Max(maxY - minY, minHeight);
 
         var currentBox = new BarcodeBox(curCenterX, curCenterY, curWidth, curHeight);
-
-
-        //if (_lastBoxParams.TryGetValue(key, out var prevBox))
+        
         if(_lastKey == key && _lastBox.HasValue)
         {
             var prevBox = _lastBox.Value;
@@ -158,13 +164,11 @@ internal sealed class BarcodeDetectionHandler(
             var sh = prevBox.Height + (curHeight - prevBox.Height) * SMOOTH_FACTOR_SIZE;
 
             var resultBox = new BarcodeBox(scx, scy, sw, sh);
-            //_lastBoxParams[key] = resultBox;
             _lastBox = resultBox;
             
             return resultBox.ToRectPoints();
         }
 
-        //_lastBoxParams[key] = currentBox;
         _lastBox = currentBox;
         _lastKey = key;
         return currentBox.ToRectPoints();
