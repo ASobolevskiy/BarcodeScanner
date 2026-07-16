@@ -26,10 +26,18 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
-        EnsureNotScanning();
+        if (IsScanning())
+        {
+            return Task.FromResult<BarcodeResult?>(new BarcodeResult
+            {
+                Status = ScanStatus.Error,
+                ErrorMessage = "Scanning is already in progress. Wait for completion or create new instance of scanner."
+            });
+        }
+
         _singleScanTcs = new TaskCompletionSource<BarcodeResult?>();
-        
-        var finalOptions = options ?? _defaultOptions;
+
+        var finalOptions = (options ?? _defaultOptions).Clone();
         finalOptions.ScannerMode = ScanType.OneShot;
         RegisterInstance(finalOptions);
 
@@ -63,13 +71,22 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     }
 
     public Task ScanContinuouslyAsync(
-        BarcodeScanningOptions? options, 
+        BarcodeScanningOptions? options,
         Action<BarcodeResult?> onResult)
     {
-        EnsureNotScanning();
+        if (IsScanning())
+        {
+            onResult(new BarcodeResult
+            {
+                Status = ScanStatus.Error,
+                ErrorMessage = "Scanning is already in progress. Wait for completion or create new instance of scanner."
+            });
+            return Task.CompletedTask;
+        }
+
         _continuousScanTcs = new TaskCompletionSource();
-        
-        var finalOptions = options ?? _defaultOptions;
+
+        var finalOptions = (options ?? _defaultOptions).Clone();
         finalOptions.ScannerMode = ScanType.Continuous;
         RegisterInstance(finalOptions);
         
@@ -153,13 +170,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         }
     }
 
-    private void EnsureNotScanning()
-    {
-        if (_singleScanTcs != null || _continuousScanTcs != null)
-        {
-            throw new InvalidOperationException("Scanning is already in progress. Wait for completion or create new instance of scanner.");
-        }
-    }
+    private bool IsScanning() => _singleScanTcs != null || _continuousScanTcs != null;
 
     private void TriggerContinuousCallback(BarcodeResult result)
     {

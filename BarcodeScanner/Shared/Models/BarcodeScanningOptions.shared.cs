@@ -78,6 +78,11 @@ public sealed class BarcodeScanningOptions
     public RoiRect? RegionOfInterest { get; set; }
 
     internal ScanType ScannerMode { get; set; }
+
+    /// <summary>
+    /// Shallow copy used internally so the library never mutates an options instance owned by the caller.
+    /// </summary>
+    internal BarcodeScanningOptions Clone() => (BarcodeScanningOptions)MemberwiseClone();
 }
 
 public enum ScanType
