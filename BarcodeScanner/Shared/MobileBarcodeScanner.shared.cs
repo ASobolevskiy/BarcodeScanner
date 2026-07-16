@@ -18,6 +18,10 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private TaskCompletionSource<BarcodeResult?>? _singleScanTcs;
     private TaskCompletionSource? _continuousScanTcs;
     private Action<BarcodeResult?>? _continuousCallback;
+
+    // 0 = idle, 1 = a scan is in progress. Claimed atomically via CompareExchange so two concurrent
+    // ScanAsync/ScanContinuouslyAsync calls on the same instance can't both pass the guard (TOCTOU).
+    private int _isScanningState;
     
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenRegistration? _autoCloseRegistration;
@@ -26,7 +30,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
     {
-        if (IsScanning())
+        if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
         {
             return Task.FromResult<BarcodeResult?>(new BarcodeResult
             {
@@ -54,18 +58,19 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         catch (Exception ex)
         {
             var tcs = Interlocked.Exchange(ref _singleScanTcs, null);
-            
-            var errorResult = new BarcodeResult 
-            { 
-                Status = ScanStatus.Error, 
-                ErrorMessage = $"Failed to start platform scanner: {ex.Message}" 
+
+            var errorResult = new BarcodeResult
+            {
+                Status = ScanStatus.Error,
+                ErrorMessage = $"Failed to start platform scanner: {ex.Message}"
             };
 
             tcs?.TrySetResult(errorResult);
-            
+
             Registrations.TryRemove(InstanceId, out _);
             CleanupAutoClose();
-            
+            Interlocked.Exchange(ref _isScanningState, 0);
+
             return tcs?.Task ?? Task.FromResult<BarcodeResult?>(errorResult);
         }
     }
@@ -74,7 +79,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         BarcodeScanningOptions? options,
         Action<BarcodeResult?> onResult)
     {
-        if (IsScanning())
+        if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
         {
             onResult(new BarcodeResult
             {
@@ -110,9 +115,10 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             callback?.Invoke(errorResult);
 
             tcs?.TrySetResult();
-            
+
             Registrations.TryRemove(InstanceId, out _);
             CleanupAutoClose();
+            Interlocked.Exchange(ref _isScanningState, 0);
 
             return tcs?.Task ?? Task.CompletedTask;
         }
@@ -144,16 +150,17 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     {
         CleanupAutoClose();
         var errorResult = new BarcodeResult { Status = ScanStatus.Error, ErrorMessage = errorMessage };
-        
+
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
         singleTcs?.TrySetResult(errorResult);
-        
+
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         var callback = _continuousCallback;
         callback?.Invoke(errorResult);
         _continuousCallback = null;
         contTcs?.TrySetResult();
-        
+        Interlocked.Exchange(ref _isScanningState, 0);
+
         if (Registrations.TryGetValue(InstanceId, out var reg) && reg.PlatformSession is not null)
         {
             reg.PlatformSession.RequestCancel();
@@ -170,8 +177,6 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         }
     }
 
-    private bool IsScanning() => _singleScanTcs != null || _continuousScanTcs != null;
-
     private void TriggerContinuousCallback(BarcodeResult result)
     {
         var callback = _continuousCallback;
@@ -184,6 +189,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         result = result with { Status = ScanStatus.Success };
         var tcs = Interlocked.Exchange(ref _singleScanTcs, null);
         tcs?.TrySetResult(result);
+        Interlocked.Exchange(ref _isScanningState, 0);
     }
 
     private void CompleteContinuousScan()
@@ -192,12 +198,13 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         var tcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         tcs?.TrySetResult();
         _continuousCallback = null;
+        Interlocked.Exchange(ref _isScanningState, 0);
     }
-    
+
     private void CancelAllScans(ScanStatus reason)
     {
         CleanupAutoClose();
-        
+
         var singleTcs = Interlocked.Exchange(ref _singleScanTcs, null);
         if (singleTcs is not null)
         {
@@ -207,8 +214,9 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         contTcs?.TrySetResult();
-        
+
         _continuousCallback = null;
+        Interlocked.Exchange(ref _isScanningState, 0);
     }
     
     private void CleanupAutoClose()
