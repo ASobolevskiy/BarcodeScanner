@@ -32,15 +32,21 @@ public class MetadataScanningController(
     {
         base.ViewDidLoad();
         var view = View;
-        if (view is null) return;
-        
+        if (view is null)
+        {
+            MobileBarcodeScanner.DispatchError(instanceId, "View failed to load.");
+            DismissViewController(true, null);
+            return;
+        }
+
         view.BackgroundColor = UIColor.Black;
         MobileBarcodeScanner.AttachPlatformSession(instanceId, new IosScannerSession(new WeakReference<IScannerPlatform>(this)));
 
         _options = MobileBarcodeScanner.GetOptions(instanceId);
         _detectionHandler = new BarcodeDetectionHandler(_options);
         ApplyOptions(_options);
-        SetupOverlay(view, _options);
+        if (!SetupOverlay(view, _options))
+            return;
         SetupCamera(view, _options);
         
         DispatchQueue.MainQueue.DispatchAsync(() => _session?.StartRunning());
@@ -100,15 +106,19 @@ public class MetadataScanningController(
         _delayBeforeClose = options.DelayBeforeScannerClose;
     }
 
-    private void SetupOverlay(UIView parentView, BarcodeScanningOptions options)
+    private bool SetupOverlay(UIView parentView, BarcodeScanningOptions options)
     {
         UIView overlay;
         if (options.CustomOverlayFactory != null)
         {
             var overlayInstance = options.CustomOverlayFactory(this);
             if(overlayInstance is not UIView view)
-                throw new InvalidOperationException("CustomOverlayFactory must return UIKit.UIView");
-            
+            {
+                MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must return UIKit.UIView");
+                DismissViewController(true, null);
+                return false;
+            }
+
             overlay = view;
             if(overlayInstance is IActiveScannerOverlay activeOverlay)
                 _activeOverlay = activeOverlay;
@@ -147,6 +157,8 @@ public class MetadataScanningController(
                               "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
         }
 #endif
+
+        return true;
     }
 
     private void SetupCamera(UIView parentView, BarcodeScanningOptions options)

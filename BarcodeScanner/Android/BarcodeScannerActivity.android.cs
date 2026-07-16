@@ -73,33 +73,42 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         _instanceId = Intent?.GetStringExtra("scanner_instance_id") ?? string.Empty;
         if (string.IsNullOrWhiteSpace(_instanceId))
         {
-            Log.Error("BarcodeScannerActivity", "CRITICAL ERROR: ScannerActivity launched without a valid InstanceId. Aborting to prevent Task hanging.");
+            Log.Error("BarcodeScannerActivity", "CRITICAL ERROR: ScannerActivity launched without a valid InstanceId. Aborting.");
             Finish();
             return;
         }
-        
+
+        // Attached as early as possible so a CancelScan()/ToggleTorch() call racing with the
+        // rest of OnCreate is never silently dropped due to PlatformSession still being null.
+        MobileBarcodeScanner.AttachPlatformSession(_instanceId, new AndroidScannerSession(new WeakReference<IScannerPlatform>(this)));
+        //LeakTracker.Track(this);
+
         _root = FindViewById<ConstraintLayout>(MResource.Id.scanner_container);
         if (_root == null)
         {
-            throw new InvalidOperationException(
-                                                "[BarcodeScanner] CRITICAL: Root ConstraintLayout with id 'scanner_container' not found in activity_scan.xml. " +
-                                                "Please ensure the library resources are correctly merged and the layout file has not been modified.");
+            MobileBarcodeScanner.DispatchError(_instanceId,
+                                               "[BarcodeScanner] CRITICAL: Root ConstraintLayout with id 'scanner_container' not found in activity_scan.xml. " +
+                                               "Please ensure the library resources are correctly merged and the layout file has not been modified.");
+            Finish();
+            return;
         }
 
-        _analysisExecutor = Executors.NewSingleThreadExecutor() ??
-                            throw new
-                                InvalidOperationException("Failed to create analysis executor. This should never happen.");
-        
+        _analysisExecutor = Executors.NewSingleThreadExecutor();
+        if (_analysisExecutor == null)
+        {
+            MobileBarcodeScanner.DispatchError(_instanceId, "Failed to create analysis executor.");
+            Finish();
+            return;
+        }
+
         _cameraPreview = FindViewById<PreviewView>(MResource.Id.camera_preview);
-        
-        MobileBarcodeScanner.AttachPlatformSession(_instanceId, new AndroidScannerSession(new WeakReference<IScannerPlatform>(this)));
-        //LeakTracker.Track(this);
-        
+
         _options = MobileBarcodeScanner.GetOptions(_instanceId);
         
         _detectionHandler = new BarcodeDetectionHandler(_options);
         ApplyOptions(_options);
-        SetupOverlay(_options);
+        if (!SetupOverlay(_options))
+            return;
 
         if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Permission.Granted)
         {
@@ -271,7 +280,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         _delayBeforeClose = options.DelayBeforeScannerClose;
     }
     
-    private void SetupOverlay(BarcodeScanningOptions options)
+    private bool SetupOverlay(BarcodeScanningOptions options)
     {
         View? overlayView;
         if (options.CustomOverlayFactory != null)
@@ -279,7 +288,9 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             var overlayInstance = options.CustomOverlayFactory(this);
             if (overlayInstance is not View view)
             {
-                throw new InvalidOperationException("CustomOverlayFactory must return Android.Views.View");
+                MobileBarcodeScanner.DispatchError(_instanceId, "CustomOverlayFactory must return Android.Views.View");
+                Finish();
+                return false;
             }
 
             overlayView = view;
@@ -325,6 +336,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
                      "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
         }
         #endif
+
+        return true;
     }
 
     private void SetupScanner(BarcodeScanningOptions options)
