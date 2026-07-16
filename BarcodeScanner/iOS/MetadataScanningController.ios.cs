@@ -181,11 +181,7 @@ public class MetadataScanningController(
         if (_metadataOutput.Connections is { Length: > 0 } && _metadataOutput.Connections[0] is { SupportsVideoOrientation: true} connection)
             connection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
 
-        var formats = options.PossibleFormats
-                             .Select(f => f.ToMetadataType())
-                             .Distinct()
-                             .ToArray();
-        _metadataOutput.MetadataObjectTypes = formats.ToBitmask();
+        _metadataOutput.MetadataObjectTypes = ResolveMetadataObjectTypes(options.PossibleFormats, _metadataOutput);
         
         _metadataQueue = new DispatchQueue("metadataQueue");
 
@@ -206,6 +202,36 @@ public class MetadataScanningController(
         UpdateRectOfInterest();
         
         //_session.StartRunning();
+    }
+
+    /// <summary>
+    /// Builds the metadata type mask strictly from known barcode symbologies.
+    /// AVFoundation has no single "all barcode formats" constant like ML Kit does, and
+    /// AVCaptureMetadataOutput.AvailableMetadataObjectTypes also includes non-barcode types
+    /// (Face, and on newer iOS versions HumanBody/CatBody/DogBody/SalientObject) — using it
+    /// directly would silently turn on face/body detection, which this library must never do.
+    /// The intersection with AvailableMetadataObjectTypes only guards against requesting a
+    /// barcode type the connected input doesn't support (AVFoundation throws otherwise);
+    /// it never widens the result beyond actual barcode symbologies.
+    /// </summary>
+    private static AVMetadataObjectType ResolveMetadataObjectTypes(
+        IEnumerable<BarcodeSymbology> possibleFormats,
+        AVCaptureMetadataOutput metadataOutput)
+    {
+        var symbologies = possibleFormats as ICollection<BarcodeSymbology> ?? possibleFormats.ToArray();
+
+        var effective = symbologies.Count == 0 || symbologies.Contains(BarcodeSymbology.AllSymbologies)
+            ? BarcodeSymbologySet.AllConcrete
+            : symbologies;
+
+        var requestedBarcodeTypes = effective
+                                    .Select(f => f.ToMetadataType())
+                                    .Where(t => t != AVMetadataObjectType.None)
+                                    .Distinct()
+                                    .ToArray()
+                                    .ToBitmask();
+
+        return requestedBarcodeTypes & metadataOutput.AvailableMetadataObjectTypes;
     }
 
     private void HandleDetectedCodes(AVMetadataObject[]? metadataObjects)

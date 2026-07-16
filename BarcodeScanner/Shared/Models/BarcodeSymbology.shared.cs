@@ -17,6 +17,7 @@ public enum BarcodeSymbology
     Itf,
     DataMatrix,
     Pdf417,
+    Codabar,
     /// <summary>
     /// Use this if you want to include all symbologies at once
     /// </summary>

@@ -20,7 +20,12 @@ internal static class AndroidBarcodeFormatMapper
             BarcodeSymbology.Itf => Barcode.FormatItf,
             BarcodeSymbology.DataMatrix => Barcode.FormatDataMatrix,
             BarcodeSymbology.Pdf417 => Barcode.FormatPdf417,
-            _ => Barcode.FormatAllFormats
+            BarcodeSymbology.Codabar => Barcode.FormatCodabar,
+            // AllSymbologies/Unknown intentionally have no direct mapping: callers must resolve
+            // "all formats" by expanding BarcodeSymbologySet.AllConcrete instead of relying on
+            // this wildcard, since FormatAllFormats also matches symbologies with no iOS
+            // equivalent (see BarcodeScannerActivity.ResolveMlKitFormats).
+            _ => Barcode.FormatUnknown
         };
     }
 
@@ -39,7 +44,8 @@ internal static class AndroidBarcodeFormatMapper
             Barcode.FormatItf => BarcodeSymbology.Itf,
             Barcode.FormatDataMatrix => BarcodeSymbology.DataMatrix,
             Barcode.FormatPdf417 => BarcodeSymbology.Pdf417,
+            Barcode.FormatCodabar => BarcodeSymbology.Codabar,
             _ => BarcodeSymbology.Unknown
         };
-    } 
+    }
 }

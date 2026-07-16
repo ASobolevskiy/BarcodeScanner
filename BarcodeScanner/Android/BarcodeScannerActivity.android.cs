@@ -329,28 +329,38 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private void SetupScanner(BarcodeScanningOptions options)
     {
-        var mlFormats = options.PossibleFormats
-                                .Select(f => f.ToMlKitFormat())
-                                .Distinct()
-                                .ToArray();
-        int firstFormat;
-        int[] otherFormats;
-        
-        if (mlFormats.Length == 0 || mlFormats.Contains(Barcode.FormatAllFormats))
-        {
-            firstFormat = Barcode.FormatAllFormats;
-            otherFormats = [];
-        }
-        else
-        {
-            firstFormat = mlFormats[0];
-            otherFormats = mlFormats.Skip(1).ToArray();
-        }
-        
+        var mlFormats = ResolveMlKitFormats(options.PossibleFormats);
+
         var mlOptions = new BarcodeScannerOptions.Builder()
-                        .SetBarcodeFormats(firstFormat, otherFormats)
+                        .SetBarcodeFormats(mlFormats[0], mlFormats.Skip(1).ToArray())
                         .Build();
         _barcodeScanner = BarcodeScanning.GetClient(mlOptions);
+    }
+
+    /// <summary>
+    /// Builds the ML Kit format list strictly from known barcode symbologies. Deliberately
+    /// avoids Barcode.FormatAllFormats: that wildcard also detects symbologies with no iOS
+    /// equivalent (e.g. UPC-A, which AVFoundation reports as EAN-13), which would break
+    /// cross-platform parity for a library that only claims to detect the ML Kit / AVFoundation
+    /// intersection.
+    /// </summary>
+    private static int[] ResolveMlKitFormats(IEnumerable<BarcodeSymbology> possibleFormats)
+    {
+        var symbologies = possibleFormats as ICollection<BarcodeSymbology> ?? possibleFormats.ToArray();
+
+        var effective = symbologies.Count == 0 || symbologies.Contains(BarcodeSymbology.AllSymbologies)
+            ? BarcodeSymbologySet.AllConcrete
+            : symbologies;
+
+        var mlFormats = effective
+                        .Select(f => f.ToMlKitFormat())
+                        .Where(f => f != Barcode.FormatUnknown)
+                        .Distinct()
+                        .ToArray();
+
+        return mlFormats.Length > 0
+            ? mlFormats
+            : BarcodeSymbologySet.AllConcrete.Select(f => f.ToMlKitFormat()).Distinct().ToArray();
     }
 
     private void SetupCamera()
