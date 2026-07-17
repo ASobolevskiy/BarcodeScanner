@@ -400,30 +400,6 @@ public class MetadataScanningController(
         });
     }
 
-    // internal static void SetTorchState(string instanceId, bool isOn)
-    // {
-    //     if (string.IsNullOrWhiteSpace(instanceId)) return;
-    //     if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
-    //         && weakRef.TryGetTarget(out var controller))
-    //     {
-    //         controller.SetTorchInternal(isOn);
-    //     }
-    // }
-    //
-    // internal static void FinishByInstanceId(string instanceId)
-    // {
-    //     if (string.IsNullOrWhiteSpace(instanceId)) return;
-    //     if (ActiveInstances.TryGetValue(instanceId, out var weakRef) 
-    //         && weakRef.TryGetTarget(out var controller))
-    //     {
-    //         DispatchQueue.MainQueue.DispatchAsync(() =>
-    //         {
-    //             if (!controller.IsBeingDismissed) 
-    //                 controller.DismissViewController(true, null);
-    //         });
-    //     }
-    // }
-    
     private class MetadataOutputDelegate(Action<AVMetadataObject[]>? callback) : AVCaptureMetadataOutputObjectsDelegate
     {
         public override void DidOutputMetadataObjects(AVCaptureMetadataOutput captureOutput, AVMetadataObject[] metadataObjects,

@@ -38,10 +38,6 @@ internal readonly record struct CornerPoints(
         BottomLeft.X, BottomLeft.Y
     ];
 
-    public Point2D GetCenter() => new Point2D(
-                                              (TopLeft.X + TopRight.X + BottomRight.X + BottomLeft.X) / 4f,
-                                              (TopLeft.Y + TopRight.Y + BottomRight.Y + BottomLeft.Y) / 4f);
-    
     public (float Left, float Top, float Right, float Bottom) GetBounds()
     {
         var left = MathF.Min(MathF.Min(TopLeft.X, TopRight.X), MathF.Min(BottomRight.X, BottomLeft.X));
@@ -51,45 +47,6 @@ internal readonly record struct CornerPoints(
         return (left, top, right, bottom);
     }
 
-    public static CornerPoints Smooth(CornerPoints from, CornerPoints to, float centerFactor, float sizeFactor)
-    {
-        // var fromCenter = from.GetCenter();
-        // var toCenter = to.GetCenter();
-        // var smoothedCenter = Point2D.Smooth(fromCenter, toCenter, centerFactor);
-        // return new CornerPoints(
-        //                         InterpolateCorner(from.TopLeft, fromCenter, to.TopLeft, toCenter, smoothedCenter, sizeFactor),
-        //                         InterpolateCorner(from.TopRight, fromCenter, to.TopRight, toCenter, smoothedCenter, sizeFactor),
-        //                         InterpolateCorner(from.BottomRight, fromCenter, to.BottomRight, toCenter, smoothedCenter, sizeFactor),
-        //                         InterpolateCorner(from.BottomLeft, fromCenter, to.BottomLeft, toCenter, smoothedCenter, sizeFactor));
-        var fromBounds = from.GetBounds();
-        var toBounds = to.GetBounds();
-        
-        var fromCenterX = (fromBounds.Left + fromBounds.Right) * 0.5f;
-        var fromCenterY = (fromBounds.Top + fromBounds.Bottom) * 0.5f;
-        var fromWidth = fromBounds.Right - fromBounds.Left;
-        var fromHeight = fromBounds.Bottom - fromBounds.Top;
-
-        var toCenterX = (toBounds.Left + toBounds.Right) * 0.5f;
-        var toCenterY = (toBounds.Top + toBounds.Bottom) * 0.5f;
-        var toWidth = toBounds.Right - toBounds.Left;
-        var toHeight = toBounds.Bottom - toBounds.Top;
-        
-        var smoothedCenterX = fromCenterX + (toCenterX - fromCenterX) * centerFactor;
-        var smoothedCenterY = fromCenterY + (toCenterY - fromCenterY) * centerFactor;
-        var smoothedWidth = fromWidth + (toWidth - fromWidth) * sizeFactor;
-        var smoothedHeight = fromHeight + (toHeight - fromHeight) * sizeFactor;
-        
-        var halfW = smoothedWidth * 0.5f;
-        var halfH = smoothedHeight * 0.5f;
-        
-        return new CornerPoints(
-                                new Point2D(smoothedCenterX - halfW, smoothedCenterY - halfH), // TopLeft
-                                new Point2D(smoothedCenterX + halfW, smoothedCenterY - halfH), // TopRight
-                                new Point2D(smoothedCenterX + halfW, smoothedCenterY + halfH), // BottomRight
-                                new Point2D(smoothedCenterX - halfW, smoothedCenterY + halfH)  // BottomLeft
-                               );
-    }
-
     public static CornerPoints Lerp(CornerPoints from, CornerPoints to, float progress)
     {
         return new CornerPoints(
@@ -97,15 +54,6 @@ internal readonly record struct CornerPoints(
                                 Point2D.Lerp(from.TopRight, to.TopRight, progress),
                                 Point2D.Lerp(from.BottomRight, to.BottomRight, progress),
                                 Point2D.Lerp(from.BottomLeft, to.BottomLeft, progress));
-    }
-
-    private static Point2D InterpolateCorner(Point2D fromCorner, Point2D fromCenter, Point2D toCorner, Point2D toCenter,
-        Point2D smoothedCenter, float sizeFactor)
-    {
-        var fromVector = new Point2D(fromCorner.X - fromCenter.X, fromCorner.Y - fromCenter.Y);
-        var toVector = new Point2D(toCorner.X - toCenter.X, toCorner.Y - toCenter.Y);
-        var smoothedVector = Point2D.Lerp(fromVector, toVector, sizeFactor);
-        return new Point2D(smoothedCenter.X + smoothedVector.X, smoothedCenter.Y + smoothedVector.Y);
     }
 }
 
