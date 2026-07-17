@@ -1,3 +1,4 @@
+using System.Threading;
 using AVFoundation;
 using BarcodeScanner.Enums;
 using BarcodeScanner.Helpers;
@@ -25,6 +26,11 @@ public class MetadataScanningController(
 
     private bool _isFinishing;
     private int _delayBeforeClose;
+
+    // GCD has no built-in "cancel a DispatchAfter block" primitive here (no DispatchWorkItem
+    // in this binding), so a stale scheduled reset is suppressed via a generation counter
+    // instead: only the block scheduled by the most recent detection is allowed to fire.
+    private int _continuousResetGeneration;
 
     private volatile bool _isScanning = true;
 
@@ -342,10 +348,17 @@ public class MetadataScanningController(
         };
         
         MobileBarcodeScanner.DispatchContinuousResult(instanceId, result);
-        
-        DispatchQueue.MainQueue.DispatchAfter(new DispatchTime(DispatchTime.Now, 
-                                                               TimeSpan.FromMilliseconds(_delayBeforeClose)), 
-                                              () => _activeOverlay?.ClearOverlay());
+
+        var myGeneration = Interlocked.Increment(ref _continuousResetGeneration);
+        var resetDelay = _options.GetEffectiveOverlayResetDelay();
+        DispatchQueue.MainQueue.DispatchAfter(new DispatchTime(DispatchTime.Now,
+                                                               TimeSpan.FromMilliseconds(resetDelay)),
+                                              () =>
+                                              {
+                                                  if (Interlocked.CompareExchange(ref _continuousResetGeneration, 0, 0) != myGeneration)
+                                                      return;
+                                                  _activeOverlay?.ClearOverlay();
+                                              });
     }
 
     private void HandleBarcodeFoundInOneShotMode(DetectionResult detectionResult)

@@ -77,12 +77,35 @@ public sealed class BarcodeScanningOptions
     /// </summary>
     public RoiRect? RegionOfInterest { get; set; }
 
+    /// <summary>
+    /// Delay before the overlay visually returns to its default (idle) state after a successful
+    /// detection in continuous scan mode (in milliseconds). Not used in single-shot mode — use
+    /// <see cref="DelayBeforeScannerClose"/> for that.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ WARNING: The effective value used at scan time will never exceed
+    /// <see cref="DelayBetweenContinuousScans"/> — if you set this higher, it will be silently
+    /// clamped down to <see cref="DelayBetweenContinuousScans"/> when the scan starts, so the
+    /// overlay always has time to finish resetting before the next detection is allowed.
+    /// Setting this property itself is not clamped immediately (unlike <see cref="DelayBeforeScannerClose"/>) —
+    /// the clamp is applied when scanning starts, not when this value is assigned.
+    /// </remarks>
+    public int DelayBeforeOverlayReset { get; set; } = 500;
+
     internal ScanType ScannerMode { get; set; }
 
     /// <summary>
     /// Shallow copy used internally so the library never mutates an options instance owned by the caller.
     /// </summary>
     internal BarcodeScanningOptions Clone() => (BarcodeScanningOptions)MemberwiseClone();
+
+    /// <summary>
+    /// Single source of truth for the DelayBeforeOverlayReset/DelayBetweenContinuousScans invariant.
+    /// Computed at point of use (not in a property setter) since a cross-field clamp in an object
+    /// initializer setter would depend on property assignment order.
+    /// </summary>
+    internal int GetEffectiveOverlayResetDelay() =>
+        Math.Max(0, Math.Min(DelayBeforeOverlayReset, DelayBetweenContinuousScans));
 }
 
 public enum ScanType

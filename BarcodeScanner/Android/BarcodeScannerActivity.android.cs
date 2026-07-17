@@ -534,20 +534,22 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             case ScanType.Continuous:
                 MobileBarcodeScanner.DispatchContinuousResult(_instanceId, codeResult);
-                _continuousHandler = new Handler(Looper.MainLooper);
+                _continuousHandler ??= new Handler(Looper.MainLooper);
+                _continuousHandler.RemoveCallbacksAndMessages(null);
                 _continuousHandler.PostDelayed(() =>
                 {
                     RunOnUiThread(() =>
                     {
                         _activeOverlay?.ClearOverlay();
                     });
-                }, _delayBeforeClose);
+                }, _options.GetEffectiveOverlayResetDelay());
                 break;
             case ScanType.OneShot:
                 _isScanning = false;
                 _isFinishing = true;
                 MobileBarcodeScanner.DispatchSingleResult(_instanceId, codeResult);
-                _singleShotHandler = new Handler(Looper.MainLooper);
+                _singleShotHandler ??= new Handler(Looper.MainLooper);
+                _singleShotHandler.RemoveCallbacksAndMessages(null);
                 _singleShotHandler.PostDelayed(Finish, _delayBeforeClose);
                 break;
         }
