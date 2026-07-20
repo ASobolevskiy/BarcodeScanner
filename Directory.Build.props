@@ -1,0 +1,11 @@
+<Project>
+    <PropertyGroup>
+        <!--
+          Workaround for NETSDK1226: some .NET SDK 10.0.2xx macOS installers ship without the
+          PrunePackageData folder, so package pruning fails at restore ("данные пакета Prune не найдены").
+          This tells the SDK to skip pruning when the data is missing instead of failing the build.
+          Harmless on healthy SDK installs - pruning resumes automatically once the data is present.
+        -->
+        <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+    </PropertyGroup>
+</Project>
