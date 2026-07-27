@@ -6,3 +6,5 @@ SampleProject.Droid/obj
 SampleProject.iOS/bin
 SampleProject.iOS/obj
 .qwen
+.claude
+CLAUDE.md
