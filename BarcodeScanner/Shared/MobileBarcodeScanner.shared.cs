@@ -95,7 +95,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         finalOptions.ScannerMode = ScanType.Continuous;
         RegisterInstance(finalOptions);
         
-        _continuousCallback = onResult;
+        Volatile.Write(ref _continuousCallback, onResult);
 
         try
         {
@@ -155,9 +155,8 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         singleTcs?.TrySetResult(errorResult);
 
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
-        var callback = _continuousCallback;
+        var callback = Interlocked.Exchange(ref _continuousCallback, null);
         callback?.Invoke(errorResult);
-        _continuousCallback = null;
         contTcs?.TrySetResult();
         Interlocked.Exchange(ref _isScanningState, 0);
 
@@ -179,7 +178,12 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     private void TriggerContinuousCallback(BarcodeResult result)
     {
-        var callback = _continuousCallback;
+        // Gate on scanning state so a result already "in flight" when CancelScan()/FailScan
+        // completes on another thread is dropped instead of reaching the consumer late.
+        if (Volatile.Read(ref _isScanningState) != 1)
+            return;
+
+        var callback = Volatile.Read(ref _continuousCallback);
         callback?.Invoke(result);
     }
 
@@ -197,7 +201,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         CleanupAutoClose();
         var tcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         tcs?.TrySetResult();
-        _continuousCallback = null;
+        Volatile.Write(ref _continuousCallback, null);
         Interlocked.Exchange(ref _isScanningState, 0);
     }
 
@@ -215,10 +219,10 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         var contTcs = Interlocked.Exchange(ref _continuousScanTcs, null);
         contTcs?.TrySetResult();
 
-        _continuousCallback = null;
+        Volatile.Write(ref _continuousCallback, null);
         Interlocked.Exchange(ref _isScanningState, 0);
     }
-    
+
     private void CleanupAutoClose()
     {
         _autoCloseRegistration?.Dispose();
