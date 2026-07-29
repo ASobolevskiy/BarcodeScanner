@@ -93,8 +93,12 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
         var finalOptions = (options ?? _defaultOptions).Clone();
         finalOptions.ScannerMode = ScanType.Continuous;
+
+        if (finalOptions.UseAutoClose)
+            Debug.WriteLine("[BarcodeScanner] Warning: UseAutoClose has no effect in continuous scan mode.");
+
         RegisterInstance(finalOptions);
-        
+
         Volatile.Write(ref _continuousCallback, onResult);
 
         try
