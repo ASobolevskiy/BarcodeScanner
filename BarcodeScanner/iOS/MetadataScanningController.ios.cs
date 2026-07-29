@@ -25,6 +25,7 @@ public class MetadataScanningController(
     private DispatchQueue? _metadataQueue;
 
     private bool _isFinishing;
+    private bool _isDismissed;
     private int _delayBeforeClose;
 
     // GCD has no built-in "cancel a DispatchAfter block" primitive here (no DispatchWorkItem
@@ -41,7 +42,7 @@ public class MetadataScanningController(
         if (view is null)
         {
             MobileBarcodeScanner.DispatchError(instanceId, "View failed to load.");
-            DismissViewController(true, null);
+            DismissOnce();
             return;
         }
 
@@ -121,7 +122,7 @@ public class MetadataScanningController(
             if(overlayInstance is not UIView view)
             {
                 MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must return UIKit.UIView");
-                DismissViewController(true, null);
+                DismissOnce();
                 return false;
             }
 
@@ -136,7 +137,7 @@ public class MetadataScanningController(
             {
                 _isFinishing = true;
                 MobileBarcodeScanner.DispatchCancel(instanceId);
-                DismissViewController(true, null);
+                DismissOnce();
             };
             defaultOverlay.OnTorchToggle += SetTorchInternal;
 
@@ -174,7 +175,7 @@ public class MetadataScanningController(
         if (_cameraDevice is null)
         {
             MobileBarcodeScanner.DispatchError(instanceId, "No camera device found");
-            DismissViewController(true, null);
+            DismissOnce();
             return;
         }
 
@@ -183,7 +184,7 @@ public class MetadataScanningController(
         {
             var errorMessage = error?.LocalizedDescription ?? "Unknown error";
             MobileBarcodeScanner.DispatchError(instanceId, errorMessage);
-            DismissViewController(true, null);
+            DismissOnce();
             return;
         }
         _session.AddInput(input);
@@ -192,7 +193,7 @@ public class MetadataScanningController(
         if (!_session.CanAddOutput(_metadataOutput))
         {
             MobileBarcodeScanner.DispatchError(instanceId, "Cannot add metadata output");
-            DismissViewController(true, null);
+            DismissOnce();
             return;
         }
         _session.AddOutput(_metadataOutput);
@@ -382,7 +383,7 @@ public class MetadataScanningController(
         
         DispatchQueue.MainQueue.DispatchAfter(new DispatchTime(DispatchTime.Now, 
                                                                TimeSpan.FromMilliseconds(_delayBeforeClose)), 
-                                              () => DismissViewController(true, null));
+                                              () => DismissOnce());
     }
     
     private void SetTorchInternal(bool turnOn)
@@ -402,15 +403,19 @@ public class MetadataScanningController(
         SetTorchInternal(turnOn);
     }
 
+    // Dismiss is idempotent because multiple independent paths can trigger it for the same
+    // session (barcode found, back button, CancelScan/RequestCancel from the shared layer) —
+    // all on the main queue, so a plain bool is enough; no volatile/Interlocked needed here.
+    private void DismissOnce()
+    {
+        if (_isDismissed) return;
+        _isDismissed = true;
+        DismissViewController(true, null);
+    }
+
     public void CloseScanner()
     {
-        DispatchQueue.MainQueue.DispatchAsync(() =>
-        {
-            if (!IsBeingDismissed)
-            {
-                DismissViewController(true, null);
-            }
-        });
+        DispatchQueue.MainQueue.DispatchAsync(DismissOnce);
     }
 
     private class MetadataOutputDelegate(Action<AVMetadataObject[]>? callback) : AVCaptureMetadataOutputObjectsDelegate
