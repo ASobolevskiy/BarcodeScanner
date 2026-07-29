@@ -29,7 +29,7 @@ public partial class MobileBarcodeScanner
 
         result = FindTopVcFromScene(result) ?? FindTopVcFromWindow(result);
 
-        return result ?? throw new InvalidOperationException("Не удалось получить текущий ViewController."); 
+        return result ?? throw new InvalidOperationException("Failed to obtain the current ViewController.");
     }
 
     private UIViewController? FindTopVcFromScene(UIViewController? result)

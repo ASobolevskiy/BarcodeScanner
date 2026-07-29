@@ -394,14 +394,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             _cameraProvider = _cameraProviderFuture?.Get() as ProcessCameraProvider;
             if(_cameraProvider == null)
-                throw new Exception("Не удалось получить экземпляр ProcessCameraProvider");
+                throw new Exception("Failed to obtain ProcessCameraProvider instance");
             BindCameraUseCases(_cameraProvider);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"CameraX error: {ex.Message}");
             if(!string.IsNullOrWhiteSpace(_instanceId))
-                MobileBarcodeScanner.DispatchError(_instanceId, $"Ошибка инициализации камеры: {ex.Message}");
+                MobileBarcodeScanner.DispatchError(_instanceId, $"Camera initialization failed: {ex.Message}");
             Finish();
         }
     }
@@ -419,15 +419,15 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         
     private Preview CreatePreviewUseCase()  
     {
-        var preview = new Preview.Builder().Build() ?? throw new NullReferenceException("Не удалось создать Preview");
+        var preview = new Preview.Builder().Build() ?? throw new NullReferenceException("Failed to create Preview");
         preview.SetSurfaceProvider(ContextCompat.GetMainExecutor(this), _cameraPreview?.SurfaceProvider);
         return preview;
     }
 
     private CameraSelector CreateCameraSelector()
     {
-        return CameraSelector.DefaultBackCamera 
-               ?? throw new ArgumentNullException(nameof(CameraSelector), "Задняя камера недоступна на этом устройстве");
+        return CameraSelector.DefaultBackCamera
+               ?? throw new ArgumentNullException(nameof(CameraSelector), "Back camera is not available on this device");
     }
 
     private ImageAnalysis CreateImageAnalysisUseCase()
@@ -441,7 +441,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         var imageAnalysis = new ImageAnalysis.Builder()
                             .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)?
                             .SetResolutionSelector(resolutionSelector)?
-                            .Build() ?? throw new Exception("Не удалось создать ImageAnalysis");
+                            .Build() ?? throw new Exception("Failed to create ImageAnalysis");
 
         if (_barcodeScanner != null)
         {
