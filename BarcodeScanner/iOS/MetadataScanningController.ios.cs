@@ -8,11 +8,14 @@ using CoreFoundation;
 
 namespace BarcodeScanner;
 
+internal sealed record RoiSnapshot(float Left, float Top, float Right, float Bottom);
+
 public class MetadataScanningController(
     string instanceId) : UIViewController, IScannerPlatform
 {
     private BarcodeScanningOptions _options;
     private CGRect _roiRect;
+    private volatile RoiSnapshot _publishedRoi = new(0, 0, 0, 0);
     private UIView _overlayView;
     private IActiveScannerOverlay? _activeOverlay;
     private BarcodeDetectionHandler? _detectionHandler;
@@ -70,6 +73,7 @@ public class MetadataScanningController(
         if (_roiRect.Equals(newRoi)) 
             return;
         _roiRect = newRoi;
+        _publishedRoi = new RoiSnapshot((float)newRoi.Left, (float)newRoi.Top, (float)newRoi.Right, (float)newRoi.Bottom);
         UpdateRectOfInterest();
     }
 
@@ -280,7 +284,8 @@ public class MetadataScanningController(
             }
         }
         
-        var roi = new RoiBounds((float)_roiRect.Left, (float)_roiRect.Top, (float)_roiRect.Right, (float)_roiRect.Bottom);
+        var snapshot = _publishedRoi;
+        var roi = new RoiBounds(snapshot.Left, snapshot.Top, snapshot.Right, snapshot.Bottom);
         var result = _detectionHandler.Process(barcodeDataList, roi);
         
         if (result is null) return;
