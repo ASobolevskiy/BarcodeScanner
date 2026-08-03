@@ -44,7 +44,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     
     private IBarcodeScanner? _barcodeScanner;
     private IActiveScannerOverlay? _activeOverlay;
-    private IImageProxy? _latestImageProxy;
+    private FrameGeometry? _latestFrameGeometry;
     private BarcodeDetectionHandler? _detectionHandler;
     private BarcodeScanningOptions _options;
 
@@ -63,7 +63,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     
     private Action<List<Barcode>>? _onBarcodeDetectedDelegate;
     private Func<bool>? _shouldProcessFrameDelegate;
-    private Action<IImageProxy>? _onImageInfoDelegate;
+    private Action<FrameGeometry>? _onImageInfoDelegate;
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
@@ -140,14 +140,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             SafeCleanup("imageAnalysis.ClearAnalyzer", 
                         () => _imageAnalysis?.ClearAnalyzer());
             
-            SafeCleanup("latestImageProxy", () => 
-            {
-                _latestImageProxy?.Close();
-                _latestImageProxy?.Dispose(); 
-                _latestImageProxy = null; 
-            });
-            
-            SafeCleanup("cameraProvider.UnbindAll", 
+            SafeCleanup("cameraProvider.UnbindAll",
                         () => _cameraProvider?.UnbindAll());
             
             SafeCleanup("Clearing Preview SurfaceProvider", () => 
@@ -241,6 +234,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             _onBarcodeDetectedDelegate = null;
             _shouldProcessFrameDelegate = null;
             _onImageInfoDelegate = null;
+            _latestFrameGeometry = null;
             
             System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Cleanup completed");
         }
@@ -447,12 +441,12 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             _onBarcodeDetectedDelegate = OnBarcodesFound;
             _shouldProcessFrameDelegate = _detectionHandler!.ShouldProcessFrame;
-            _onImageInfoDelegate = proxy => _latestImageProxy = proxy;
-            
+            _onImageInfoDelegate = geometry => _latestFrameGeometry = geometry;
+
             _barcodeAnalyser = new BarcodeAnalyzer(_barcodeScanner,
                                                    new WeakReference<Action<List<Barcode>>>(_onBarcodeDetectedDelegate),
                                                    new WeakReference<Func<bool>>(_shouldProcessFrameDelegate),
-                                                   new WeakReference<Action<IImageProxy>>(_onImageInfoDelegate));
+                                                   new WeakReference<Action<FrameGeometry>>(_onImageInfoDelegate));
             imageAnalysis.SetAnalyzer(_analysisExecutor,
                                       _barcodeAnalyser);
         }
@@ -572,7 +566,11 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             srcPoints[i * 2 + 1] = points[i].Y;
         }
 
-        var matrix = MatrixHelper.GetCorrectionMatrix(_latestImageProxy,
+        var geometry = _latestFrameGeometry;
+        if (geometry is null)
+            return null;
+
+        var matrix = MatrixHelper.GetCorrectionMatrix(geometry.Width, geometry.Height, geometry.RotationDegrees,
                                                       _cameraPreview);
         if (matrix == null)
             return null;

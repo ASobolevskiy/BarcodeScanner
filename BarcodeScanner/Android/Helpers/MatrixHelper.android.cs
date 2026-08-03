@@ -8,26 +8,24 @@ namespace BarcodeScanner.Helpers;
 public static class MatrixHelper
 {
     public static Matrix? GetCorrectionMatrix(
-        IImageProxy? imageProxy,
+        int imageWidth,
+        int imageHeight,
+        int rotationDegrees,
         PreviewView? previewView,
         LensFacing lensFacing = LensFacing.Back,
         bool applyRotation = false)
     {
-        if (imageProxy == null || previewView == null)
+        if (previewView == null)
             return null;
-        
+
         var viewWidth = previewView.Width;
         var viewHeight = previewView.Height;
         if(viewWidth == 0 ||  viewHeight == 0)
             return null;
-        
-        var imgWidth = imageProxy.Width;
-        var imgHeight = imageProxy.Height;
-        var rotationDegrees = imageProxy.ImageInfo?.RotationDegrees ?? 0;
-        
+
         var isRotated = rotationDegrees % 180 != 0;
-        float rotatedWidth = isRotated ? imgHeight : imgWidth;
-        float rotatedHeight = isRotated ? imgWidth : imgHeight;
+        float rotatedWidth = isRotated ? imageHeight : imageWidth;
+        float rotatedHeight = isRotated ? imageWidth : imageHeight;
         if (rotatedWidth <= 0 || rotatedHeight <= 0)
             return null;
 

@@ -9,11 +9,13 @@ using Xamarin.Google.MLKit.Vision.Common;
 
 namespace BarcodeScanner.Analysers;
 
+internal sealed record FrameGeometry(int Width, int Height, int RotationDegrees);
+
 internal sealed class BarcodeAnalyzer(
     IBarcodeScanner scanner,
     WeakReference<Action<List<Barcode>>> onBarcodeDetectedRef,
     WeakReference<Func<bool>> shouldProcessFrameRef,
-    WeakReference<Action<IImageProxy>> onImageInfoRef)
+    WeakReference<Action<FrameGeometry>> onImageInfoRef)
     : Java.Lang.Object, ImageAnalysis.IAnalyzer
 {
     private readonly WeakReference<IBarcodeScanner> _scannerRef = new(scanner);
@@ -39,8 +41,11 @@ internal sealed class BarcodeAnalyzer(
             return;
         }
         
-        if (proxyImage?.Image == null || proxyImage.ImageInfo == null) 
+        if (proxyImage?.Image == null || proxyImage.ImageInfo == null)
+        {
+            proxyImage?.Close();
             return;
+        }
 
         if (!shouldProcessFrameRef.TryGetTarget(out var shouldProcess) || !shouldProcess())
         {
@@ -50,7 +55,7 @@ internal sealed class BarcodeAnalyzer(
 
         if (onImageInfoRef.TryGetTarget(out var onImageInfo))
         {
-            onImageInfo.Invoke(proxyImage);
+            onImageInfo.Invoke(new FrameGeometry(proxyImage.Width, proxyImage.Height, proxyImage.ImageInfo.RotationDegrees));
         }
         
         var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
