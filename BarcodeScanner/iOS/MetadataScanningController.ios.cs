@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading;
 using AVFoundation;
 using BarcodeScanner.Enums;
@@ -90,7 +91,7 @@ public class MetadataScanningController(
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    Debug.WriteLine(e);
                 }
             });
         }
@@ -326,8 +327,8 @@ public class MetadataScanningController(
         var view = View;
         if (view is null) 
             return CGRect.Empty;
-        if(_options.RegionOfInterest.HasValue)
-            return _options.RegionOfInterest.Value.ToCgRect(view.Bounds.Width, view.Bounds.Height);
+        if(_options.RegionOfInterest is {IsValid: true} roi)
+            return roi.ToCgRect(view.Bounds.Width, view.Bounds.Height);
 
         return _activeOverlay is not null
             ? _activeOverlay.GetViewfinderRect().ToCgRect()

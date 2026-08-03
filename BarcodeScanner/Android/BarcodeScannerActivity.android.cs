@@ -498,8 +498,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private RectF GetCurrentRoiRectF()
     {
-        if (_options.RegionOfInterest.HasValue && _cameraPreview != null)
-            return _options.RegionOfInterest.Value.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
+        if (_options.RegionOfInterest is {IsValid: true} roi && _cameraPreview != null)
+            return roi.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
         
         return _activeOverlay is not null
             ? _activeOverlay.GetViewfinderRect().ToRectF()
