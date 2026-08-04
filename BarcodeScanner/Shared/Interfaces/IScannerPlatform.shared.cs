@@ -1,6 +1,6 @@
 namespace BarcodeScanner;
 
-public interface IScannerPlatform
+internal interface IScannerPlatform
 {
     void CloseScanner();
     void SetTorch(bool turnOn);

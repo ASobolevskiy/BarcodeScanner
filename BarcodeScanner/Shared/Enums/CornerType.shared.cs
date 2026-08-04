@@ -1,6 +1,6 @@
 namespace BarcodeScanner.Enums;
 
-public enum CornerType
+internal enum CornerType
 {
     TopLeft,
     TopRight,

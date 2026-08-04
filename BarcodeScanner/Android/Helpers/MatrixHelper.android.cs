@@ -5,7 +5,7 @@ using AndroidX.Camera.View;
 
 namespace BarcodeScanner.Helpers;
 
-public static class MatrixHelper
+internal static class MatrixHelper
 {
     public static Matrix? GetCorrectionMatrix(
         int imageWidth,

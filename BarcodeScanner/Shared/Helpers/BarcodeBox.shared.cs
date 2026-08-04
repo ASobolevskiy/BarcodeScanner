@@ -1,6 +1,6 @@
 namespace BarcodeScanner.Helpers;
 
-public readonly struct BarcodeBox(float centerX, float centerY, float width, float height)
+internal readonly struct BarcodeBox(float centerX, float centerY, float width, float height)
 {
     public float CenterX { get; } = centerX;
     public float CenterY { get; } = centerY;
