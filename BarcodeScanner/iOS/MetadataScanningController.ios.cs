@@ -325,10 +325,18 @@ internal class MetadataScanningController(
     {
         
         var view = View;
-        if (view is null) 
+        if (view is null)
             return CGRect.Empty;
-        if(_options.RegionOfInterest is {IsValid: true} roi)
-            return roi.ToCgRect(view.Bounds.Width, view.Bounds.Height);
+
+        if (_options.RegionOfInterest is { } roi)
+        {
+            if (roi.IsValid)
+                return roi.ToCgRect(view.Bounds.Width, view.Bounds.Height);
+
+            Debug.WriteLine("[BarcodeScanner] Warning: RegionOfInterest is set but invalid " +
+                             "(coordinates must be in [0,1] with Right > Left and Bottom > Top) " +
+                             "— falling back to the default detection area.");
+        }
 
         return _activeOverlay is not null
             ? _activeOverlay.GetViewfinderRect().ToCgRect()

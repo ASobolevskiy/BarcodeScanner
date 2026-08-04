@@ -1,5 +1,17 @@
 namespace BarcodeScanner.Models;
 
+/// <summary>
+/// A region of interest within the scanner screen, in coordinates relative to the screen
+/// size (0.0 to 1.0 on each axis) rather than absolute pixels — (0, 0) is the top-left
+/// corner, (1, 1) is the bottom-right corner. Set via
+/// <see cref="BarcodeScanningOptions.RegionOfInterest"/> to restrict detection to part
+/// of the frame. If <see cref="IsValid"/> is false, the value is ignored and the default
+/// detection area is used instead — see <see cref="IsValid"/> for the validity rules.
+/// </summary>
+/// <param name="Left">Left edge, relative to screen width (0.0 to 1.0).</param>
+/// <param name="Top">Top edge, relative to screen height (0.0 to 1.0).</param>
+/// <param name="Right">Right edge, relative to screen width (0.0 to 1.0).</param>
+/// <param name="Bottom">Bottom edge, relative to screen height (0.0 to 1.0).</param>
 public readonly record struct RoiRect(
     float Left,
     float Top,

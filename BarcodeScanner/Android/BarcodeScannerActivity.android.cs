@@ -498,9 +498,17 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private RectF GetCurrentRoiRectF()
     {
-        if (_options.RegionOfInterest is {IsValid: true} roi && _cameraPreview != null)
-            return roi.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
-        
+        if (_options.RegionOfInterest is { } roi)
+        {
+            if (roi.IsValid && _cameraPreview != null)
+                return roi.ToRectF(_cameraPreview.Width, _cameraPreview.Height);
+
+            if (!roi.IsValid)
+                System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Warning: RegionOfInterest is set but invalid " +
+                                                    "(coordinates must be in [0,1] with Right > Left and Bottom > Top) " +
+                                                    "— falling back to the default detection area.");
+        }
+
         return _activeOverlay is not null
             ? _activeOverlay.GetViewfinderRect().ToRectF()
             : new RectF(0, 0, _cameraPreview?.Width ?? 0, _cameraPreview?.Height ?? 0);
