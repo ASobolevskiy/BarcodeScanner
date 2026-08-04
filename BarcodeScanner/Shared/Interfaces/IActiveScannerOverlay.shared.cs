@@ -2,11 +2,33 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
+/// <summary>
+/// Implement this on a custom overlay view (returned from
+/// <see cref="BarcodeScanningOptions.CustomOverlayFactory"/>) to receive live updates from
+/// the scan engine — detected barcode positions, region-of-interest sync, and reset
+/// notifications. The library's built-in overlays implement this interface internally.
+/// </summary>
 public interface IActiveScannerOverlay
 {
+    /// <summary>
+    /// Called to reset the overlay to its idle (no detection) visual state — after the
+    /// <see cref="BarcodeScanningOptions.DelayBeforeOverlayReset"/> following a detection in
+    /// continuous mode, or whenever a frame has nothing to highlight.
+    /// </summary>
     void ClearOverlay();
+
+    /// <summary>
+    /// Called on every frame where a barcode is detected and being tracked, to draw or
+    /// animate a highlight around it.
+    /// </summary>
+    /// <param name="barcodeValue">The decoded value of the tracked barcode.</param>
+    /// <param name="targetPoints">
+    /// The four corner points of the detected barcode (top-left, top-right, bottom-right,
+    /// bottom-left, each as an x,y pair — 8 floats total), in the same view coordinate
+    /// space the overlay is drawn in.
+    /// </param>
     void UpdateOverlay(string? barcodeValue, float[] targetPoints);
-    
+
     /// <summary>
     /// The barcode detection area (in px) drawn by this overlay
     /// <remarks>Library uses this value if the BarcodeScanningOptions.RegionOfInterest is not set</remarks>
