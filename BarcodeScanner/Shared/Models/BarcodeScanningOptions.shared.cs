@@ -1,8 +1,13 @@
 using System;
 using System.Collections.Generic;
+using BarcodeScanner;
 
 namespace BarcodeScanner.Models;
 
+/// <summary>
+/// Configuration for a single scan session, passed to <see cref="IMobileBarcodeScanner.ScanAsync"/>
+/// or <see cref="IMobileBarcodeScanner.ScanContinuouslyAsync"/>. If omitted, default values are used.
+/// </summary>
 public sealed class BarcodeScanningOptions
 {
     /// <summary>
