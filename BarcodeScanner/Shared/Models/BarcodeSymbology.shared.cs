@@ -1,5 +1,11 @@
 namespace BarcodeScanner.Models;
 
+/// <summary>
+/// Barcode/QR symbologies (formats) this library can detect. Used to narrow detection via
+/// <see cref="BarcodeScanningOptions.PossibleFormats"/> and reported on a successful scan
+/// via <see cref="BarcodeResult.Symbology"/>. The concrete values represent the intersection
+/// of what both platforms' native scanning engines support.
+/// </summary>
 public enum BarcodeSymbology
 {
     /// <summary>
