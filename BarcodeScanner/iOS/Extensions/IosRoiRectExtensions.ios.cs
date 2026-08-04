@@ -2,7 +2,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
-public static class IosRoiRectExtensions
+internal static class IosRoiRectExtensions
 {
     extension(RoiRect roiRect)
     {

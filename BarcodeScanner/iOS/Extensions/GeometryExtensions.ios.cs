@@ -2,7 +2,7 @@ using CoreGraphics;
 
 namespace BarcodeScanner;
 
-public static class GeometryExtensions
+internal static class GeometryExtensions
 {
     extension(CGPoint[]? points)
     {

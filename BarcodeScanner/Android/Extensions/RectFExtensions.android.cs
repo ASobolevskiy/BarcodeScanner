@@ -3,7 +3,7 @@ using BarcodeScanner.Helpers;
 
 namespace BarcodeScanner;
 
-public static class RectFExtensions
+internal static class RectFExtensions
 {
     extension(RectF rect)
     {

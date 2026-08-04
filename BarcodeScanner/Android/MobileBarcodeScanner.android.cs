@@ -6,7 +6,7 @@ namespace BarcodeScanner;
 
 public partial class MobileBarcodeScanner
 {
-    private partial Task<BarcodeResult?> PlatformScanSingleAsync()
+    private partial Task<BarcodeResult> PlatformScanSingleAsync()
     {
         var intent = CreateIntent();
         GetCurrentActivity().StartActivity(intent);

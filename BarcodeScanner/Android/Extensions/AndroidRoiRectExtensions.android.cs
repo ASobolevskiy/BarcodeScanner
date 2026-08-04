@@ -3,7 +3,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
-public static class AndroidRoiRectExtensions
+internal static class AndroidRoiRectExtensions
 {
     extension(RoiRect roiRect)
     {

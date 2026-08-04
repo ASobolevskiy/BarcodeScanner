@@ -15,7 +15,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     
     private string InstanceId { get; } = Guid.NewGuid().ToString();
     
-    private TaskCompletionSource<BarcodeResult?>? _singleScanTcs;
+    private TaskCompletionSource<BarcodeResult>? _singleScanTcs;
     private TaskCompletionSource? _continuousScanTcs;
     private Action<BarcodeResult?>? _continuousCallback;
 
@@ -28,18 +28,18 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     
     private bool _isTorchOn;
 
-    public Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null)
+    public Task<BarcodeResult> ScanAsync(BarcodeScanningOptions? options = null)
     {
         if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
         {
-            return Task.FromResult<BarcodeResult?>(new BarcodeResult
+            return Task.FromResult(new BarcodeResult
             {
                 Status = ScanStatus.Error,
                 ErrorMessage = "Scanning is already in progress. Wait for completion or create new instance of scanner."
             });
         }
 
-        _singleScanTcs = new TaskCompletionSource<BarcodeResult?>();
+        _singleScanTcs = new TaskCompletionSource<BarcodeResult>();
 
         var finalOptions = (options ?? _defaultOptions).Clone();
         finalOptions.ScannerMode = ScanType.OneShot;
@@ -71,7 +71,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             CleanupAutoClose();
             Interlocked.Exchange(ref _isScanningState, 0);
 
-            return tcs?.Task ?? Task.FromResult<BarcodeResult?>(errorResult);
+            return tcs?.Task ?? Task.FromResult(errorResult);
         }
     }
 
@@ -79,6 +79,8 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         BarcodeScanningOptions? options,
         Action<BarcodeResult?> onResult)
     {
+        ArgumentNullException.ThrowIfNull(onResult);
+
         if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
         {
             onResult(new BarcodeResult
@@ -314,6 +316,6 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
             ? registration.Options
             : new BarcodeScanningOptions();
     
-    private partial Task<BarcodeResult?> PlatformScanSingleAsync();
+    private partial Task<BarcodeResult> PlatformScanSingleAsync();
     private partial Task PlatformScanContinuousAsync();
 }

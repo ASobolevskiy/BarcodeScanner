@@ -2,7 +2,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
-public static class IosViewFinderRectExtensions
+internal static class IosViewFinderRectExtensions
 {
     extension(CGRect rect)
     {

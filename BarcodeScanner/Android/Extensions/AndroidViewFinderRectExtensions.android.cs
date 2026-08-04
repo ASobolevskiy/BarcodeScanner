@@ -3,7 +3,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
-public static class AndroidViewFinderRectExtensions
+internal static class AndroidViewFinderRectExtensions
 {
     extension(RectF rect)
     {

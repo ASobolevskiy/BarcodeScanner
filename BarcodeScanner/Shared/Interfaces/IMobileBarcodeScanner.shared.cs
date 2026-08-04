@@ -6,7 +6,7 @@ namespace BarcodeScanner;
 
 public interface IMobileBarcodeScanner
 {
-    Task<BarcodeResult?> ScanAsync(BarcodeScanningOptions? options = null);
+    Task<BarcodeResult> ScanAsync(BarcodeScanningOptions? options = null);
     
     Task ScanContinuouslyAsync(
         BarcodeScanningOptions? options,

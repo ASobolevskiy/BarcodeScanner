@@ -2,7 +2,7 @@ using AVFoundation;
 
 namespace BarcodeScanner;
 
-public static class ArrayExtensions
+internal static class ArrayExtensions
 {
     extension(IEnumerable<AVMetadataObjectType> collection)
     {
