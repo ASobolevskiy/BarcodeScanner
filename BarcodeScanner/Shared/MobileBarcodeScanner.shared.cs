@@ -8,6 +8,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
+/// <inheritdoc/>
 public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 {
     private static readonly ConcurrentDictionary<string, ScannerRegistration> Registrations = new ();
@@ -28,6 +29,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     
     private bool _isTorchOn;
 
+    /// <inheritdoc/>
     public Task<BarcodeResult> ScanAsync(BarcodeScanningOptions? options = null)
     {
         if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
@@ -75,6 +77,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         }
     }
 
+    /// <inheritdoc/>
     public Task ScanContinuouslyAsync(
         BarcodeScanningOptions? options,
         Action<BarcodeResult?> onResult)
@@ -130,6 +133,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         }
     }
 
+    /// <inheritdoc/>
     public void CancelScan()
     {
         CleanupAutoClose();
@@ -172,6 +176,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
         }
     }
 
+    /// <inheritdoc/>
     public void ToggleTorch()
     {
         _isTorchOn = !_isTorchOn;
