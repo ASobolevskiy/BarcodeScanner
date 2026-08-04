@@ -185,22 +185,22 @@ internal class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposa
         var len = _guideLengthPx;
         var rect = _staticRect;
         
-        // Левый верхний
+        // Top-left
         _staticGuidesPath.MoveTo(rect.Left, rect.Top + len);
         _staticGuidesPath.LineTo(rect.Left, rect.Top);
         _staticGuidesPath.LineTo(rect.Left + len, rect.Top);
 
-        // Правый верхний
+        // Top-right
         _staticGuidesPath.MoveTo(rect.Right, rect.Top + len);
         _staticGuidesPath.LineTo(rect.Right, rect.Top);
         _staticGuidesPath.LineTo(rect.Right - len, rect.Top);
 
-        // Правый нижний
+        // Bottom-right
         _staticGuidesPath.MoveTo(rect.Right, rect.Bottom - len);
         _staticGuidesPath.LineTo(rect.Right, rect.Bottom);
         _staticGuidesPath.LineTo(rect.Right - len, rect.Bottom);
 
-        // Левый нижний
+        // Bottom-left
         _staticGuidesPath.MoveTo(rect.Left, rect.Bottom - len);
         _staticGuidesPath.LineTo(rect.Left, rect.Bottom);
         _staticGuidesPath.LineTo(rect.Left + len, rect.Bottom);
@@ -241,9 +241,9 @@ internal class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposa
         var verticalSign = corner is CornerType.TopLeft or CornerType.TopRight ? 1f : -1f;
         var horizontalSign = corner is CornerType.TopLeft or CornerType.BottomLeft ? 1f : -1f;
         
-        // Вертикальная линия: от "внешней" точки к углу
+        // Vertical line: from the "outer" point to the corner
         canvas.DrawLine(x, y + verticalLen * verticalSign, x, y, paint);
-        // Горизонтальная линия: от угла к "внешней" точке
+        // Horizontal line: from the corner to the "outer" point
         canvas.DrawLine(x, y, x + horizontalLen * horizontalSign, y, paint);
     }
 

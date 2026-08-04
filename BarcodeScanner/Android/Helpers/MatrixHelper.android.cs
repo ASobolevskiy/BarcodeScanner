@@ -86,7 +86,7 @@ internal static class MatrixHelper
             offsetX = viewWidth - rotatedWidth * scale;
             offsetY = viewHeight - rotatedHeight * scale;
         }
-        else // FitCenter, FillCenter или неизвестный тип → центрируем
+        else // FitCenter, FillCenter, or unknown type → center
         {
             offsetX = (viewWidth - rotatedWidth * scale) / 2f;
             offsetY = (viewHeight - rotatedHeight * scale) / 2f;

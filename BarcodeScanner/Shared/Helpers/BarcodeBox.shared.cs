@@ -9,9 +9,9 @@ internal readonly struct BarcodeBox(float centerX, float centerY, float width, f
     
     public float[] ToRectPoints() =>
     [
-        CenterX - Width / 2f,  CenterY - Height / 2f, // Левый верхний
-        CenterX + Width / 2f,  CenterY - Height / 2f, // Правый верхний
-        CenterX + Width / 2f,  CenterY + Height / 2f, // Правый нижний
-        CenterX - Width / 2f,  CenterY + Height / 2f  // Левый нижний
+        CenterX - Width / 2f,  CenterY - Height / 2f, // Top-left
+        CenterX + Width / 2f,  CenterY - Height / 2f, // Top-right
+        CenterX + Width / 2f,  CenterY + Height / 2f, // Bottom-right
+        CenterX - Width / 2f,  CenterY + Height / 2f  // Bottom-left
     ];
 }
