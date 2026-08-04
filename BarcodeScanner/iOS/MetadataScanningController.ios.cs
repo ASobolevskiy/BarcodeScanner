@@ -351,7 +351,7 @@ internal class MetadataScanningController(
             Symbology = detectionResult.Symbology,
             RawValue = detectionResult.RawValue,
             DisplayValue = detectionResult.DisplayValue,
-            ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            ScannedTime = DateTimeOffset.Now
         };
         
         MobileBarcodeScanner.DispatchContinuousResult(instanceId, result);
@@ -382,7 +382,7 @@ internal class MetadataScanningController(
             Symbology = detectionResult.Symbology,
             RawValue = detectionResult.RawValue,
             DisplayValue = detectionResult.DisplayValue,
-            ScannedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            ScannedTime = DateTimeOffset.Now
         };
         
         MobileBarcodeScanner.DispatchSingleResult(instanceId, result);

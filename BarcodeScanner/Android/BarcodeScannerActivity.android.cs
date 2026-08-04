@@ -521,7 +521,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             Symbology = result.Symbology,
             ErrorMessage = null,
             Status = ScanStatus.Success,
-            ScannedTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")
+            ScannedTime = DateTimeOffset.Now
         };
         
         switch (result.ScanType)
