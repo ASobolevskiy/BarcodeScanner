@@ -4,7 +4,7 @@ using UIKit;
 
 namespace BarcodeScanner.Ui.Views;
 
-public sealed class BarcodeScannerOverlayWithButtons : UIView, IActiveScannerOverlay
+internal sealed class BarcodeScannerOverlayWithButtons : UIView, IActiveScannerOverlay
 {
     private const int BUTTON_SIZE = 56;
     private const int BUTTON_MARGIN = 30;

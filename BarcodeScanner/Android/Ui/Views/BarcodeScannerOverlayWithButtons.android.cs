@@ -9,7 +9,7 @@ using BarcodeScanner.Models;
 
 namespace BarcodeScanner.Ui.Views;
 
-public class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverlay
+internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverlay
 {
     private const int BUTTON_SIZE = 56;
     private const int BUTTON_MARGIN = 60;

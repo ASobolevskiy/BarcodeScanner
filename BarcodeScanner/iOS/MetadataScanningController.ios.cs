@@ -11,7 +11,7 @@ namespace BarcodeScanner;
 
 internal sealed record RoiSnapshot(float Left, float Top, float Right, float Bottom);
 
-public class MetadataScanningController(
+internal class MetadataScanningController(
     string instanceId) : UIViewController, IScannerPlatform
 {
     private BarcodeScanningOptions _options;

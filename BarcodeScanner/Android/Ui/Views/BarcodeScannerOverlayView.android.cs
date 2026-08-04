@@ -13,7 +13,7 @@ using Path = Android.Graphics.Path;
 
 namespace BarcodeScanner.Ui.Views;
 
-public class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposable
+internal class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposable
 {
     #region Constants
 

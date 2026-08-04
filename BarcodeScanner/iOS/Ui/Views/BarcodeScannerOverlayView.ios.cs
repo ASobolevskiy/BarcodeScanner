@@ -8,7 +8,7 @@ using UIKit;
 
 namespace BarcodeScanner.Ui.Views;
 
-public sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
+internal sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
 {
     private readonly CAShapeLayer _topLeftLayer;
     private readonly CAShapeLayer _topRightLayer;
