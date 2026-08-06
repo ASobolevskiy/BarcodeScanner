@@ -285,70 +285,93 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     
     private bool SetupOverlay(BarcodeScanningOptions options)
     {
-        View? overlayView;
-        if (options.CustomOverlayFactory != null)
+        // The whole body is guarded because it calls into arbitrary consumer code
+        // (CustomOverlayFactory) with no way to know what it might throw, plus a handful of
+        // platform calls (AddView, ConstraintSet) that can also fail. SetupOverlay is called
+        // from OnCreate, which has no enclosing try/catch anywhere above it — an unhandled
+        // exception here would crash the host app instead of following this codebase's own
+        // "setup failure -> DispatchError + Finish()" convention (already used a few lines
+        // below for the two explicit validation failures).
+        try
         {
-            var overlayInstance = options.CustomOverlayFactory(this);
-            if (overlayInstance is not View view)
+            View? overlayView;
+            if (options.CustomOverlayFactory != null)
             {
-                MobileBarcodeScanner.DispatchError(_instanceId, "CustomOverlayFactory must return Android.Views.View");
+                var overlayInstance = options.CustomOverlayFactory(this);
+                if (overlayInstance is not View view)
+                {
+                    MobileBarcodeScanner.DispatchError(_instanceId, "CustomOverlayFactory must return Android.Views.View");
+                    Finish();
+                    return false;
+                }
+
+                overlayView = view;
+
+                if (overlayInstance is IActiveScannerOverlay activeOverlay)
+                {
+                    _activeOverlay = activeOverlay;
+                }
+            }
+            else
+            {
+                _overlayContainer = new BarcodeScannerOverlayWithButtons(this);
+
+                _overlayContainer.OnBackRequested += CancelScan;
+                _overlayContainer.OnTorchToggle += SetTorch;
+
+                overlayView = _overlayContainer;
+                _activeOverlay = _overlayContainer;
+            }
+
+            if (overlayView.Parent is not null)
+            {
+                MobileBarcodeScanner.DispatchError(_instanceId,
+                    "CustomOverlayFactory must return a fresh, unattached View for every scan session.");
                 Finish();
                 return false;
             }
 
-            overlayView = view;
+            _overlayView = overlayView;
+            overlayView.Id = View.GenerateViewId();
 
-            if (overlayInstance is IActiveScannerOverlay activeOverlay)
+            _root?.AddView(overlayView);
+            var constraintSet = new ConstraintSet();
+            constraintSet.Clone(_root);
+
+            constraintSet.Connect(overlayView.Id, ConstraintSet.Top, ConstraintSet.ParentId, ConstraintSet.Top);
+            constraintSet.Connect(overlayView.Id, ConstraintSet.Bottom, ConstraintSet.ParentId, ConstraintSet.Bottom);
+            constraintSet.Connect(overlayView.Id, ConstraintSet.Start, ConstraintSet.ParentId, ConstraintSet.Start);
+            constraintSet.Connect(overlayView.Id, ConstraintSet.End, ConstraintSet.ParentId, ConstraintSet.End);
+
+            constraintSet.ApplyTo(_root);
+
+            if (options.RegionOfInterest is { IsValid: true } roi)
+                _activeOverlay?.SyncRegionOfInterest(roi);
+
+            #if DEBUG
+            if (options.RegionOfInterest is { IsValid: true } && options.CustomOverlayFactory is not null)
             {
-                _activeOverlay = activeOverlay;
+                Log.Warn("BarcodeScanner",
+                         "RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
+                         "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
             }
-        }
-        else
-        {
-            _overlayContainer = new BarcodeScannerOverlayWithButtons(this);
+            #endif
 
-            _overlayContainer.OnBackRequested += CancelScan;
-            _overlayContainer.OnTorchToggle += SetTorch;
-            
-            overlayView = _overlayContainer;
-            _activeOverlay = _overlayContainer;
+            return true;
         }
-
-        if (overlayView.Parent is not null)
+        catch (System.Exception ex)
         {
-            MobileBarcodeScanner.DispatchError(_instanceId,
-                "CustomOverlayFactory must return a fresh, unattached View for every scan session.");
+            // Deliberately no cleanup here: OnDestroy is the sole cleanup owner. If we failed
+            // before _overlayView/_overlayContainer were assigned, OnDestroy's cleanup already
+            // no-ops on them (still null); if we failed after, OnDestroy's existing RemoveView
+            // + unsubscribe + Dispose already handles it correctly. Cleaning up here too would
+            // double-dispose/double-unsubscribe. Finish() below reliably drives OnDestroy.
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] SetupOverlay failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
+            MobileBarcodeScanner.DispatchError(_instanceId, $"Failed to set up scanner overlay: {ex.Message}");
             Finish();
             return false;
         }
-
-        _overlayView = overlayView;
-        overlayView.Id = View.GenerateViewId();
-
-        _root?.AddView(overlayView);
-        var constraintSet = new ConstraintSet();
-        constraintSet.Clone(_root);
-            
-        constraintSet.Connect(overlayView.Id, ConstraintSet.Top, ConstraintSet.ParentId, ConstraintSet.Top);
-        constraintSet.Connect(overlayView.Id, ConstraintSet.Bottom, ConstraintSet.ParentId, ConstraintSet.Bottom);
-        constraintSet.Connect(overlayView.Id, ConstraintSet.Start, ConstraintSet.ParentId, ConstraintSet.Start);
-        constraintSet.Connect(overlayView.Id, ConstraintSet.End, ConstraintSet.ParentId, ConstraintSet.End);
-
-        constraintSet.ApplyTo(_root);
-        
-        if(options.RegionOfInterest is {IsValid: true} roi)
-            _activeOverlay?.SyncRegionOfInterest(roi);
-        
-        #if DEBUG
-        if (options.RegionOfInterest is { IsValid: true } && options.CustomOverlayFactory is not null)
-        {
-            Log.Warn("BarcodeScanner",
-                     "RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
-                     "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
-        }
-        #endif
-
-        return true;
     }
 
     private void SetupScanner(BarcodeScanningOptions options)
