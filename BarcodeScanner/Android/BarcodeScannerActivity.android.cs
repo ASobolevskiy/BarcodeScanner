@@ -134,12 +134,24 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
         try
         {
-            SafeCleanup("barcodeAnalyser.MarkAsDisposed", 
+            SafeCleanup("barcodeAnalyser.MarkAsDisposed",
                         () => _barcodeAnalyser?.MarkAsDisposed());
-            
-            SafeCleanup("imageAnalysis.ClearAnalyzer", 
+
+            SafeCleanup("imageAnalysis.ClearAnalyzer",
                         () => _imageAnalysis?.ClearAnalyzer());
-            
+
+            // Drain whatever Analyze() call is already queued or running on the background
+            // executor before disposing anything it touches below (_barcodeScanner,
+            // _barcodeAnalyser, _imageAnalysis, _cameraProvider) — MarkAsDisposed/ClearAnalyzer
+            // stop *new* frames from being scheduled, but don't wait for an in-flight one to
+            // finish, so disposal further down could otherwise race with it.
+            SafeCleanup("Analysis executor shutdown", () =>
+            {
+                _analysisExecutor?.Shutdown();
+                _analysisExecutor?.AwaitTermination(300, TimeUnit.Milliseconds);
+                _analysisExecutor = null;
+            });
+
             SafeCleanup("cameraProvider.UnbindAll",
                         () => _cameraProvider?.UnbindAll());
             
@@ -245,12 +257,6 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         }
         finally
         {
-            SafeCleanup("Analysis executor shutdown", () =>
-            {
-                _analysisExecutor?.ShutdownNow();
-                _analysisExecutor = null;
-            });
-            
             System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Calling base.OnDestroy");
             base.OnDestroy();
         }

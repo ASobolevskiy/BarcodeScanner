@@ -35,43 +35,65 @@ internal sealed class BarcodeAnalyzer(
     
     public void Analyze(IImageProxy? proxyImage)
     {
-        if (_isStopping || _isDisposed == 1)
+        // CameraX requires Analyze() to always close the ImageProxy it's given, on every exit
+        // path — otherwise, with ImageAnalysis.StrategyKeepOnlyLatest, no further frames are
+        // ever delivered (a silent, permanent scanning freeze) and the underlying surface/buffer
+        // may not release either. handedOff is the only source of truth for whether ownership
+        // was actually transferred to CompleteListener; every early return leaves it false, so
+        // there is exactly one place — the finally block below — that ever closes the frame.
+        var handedOff = false;
+        try
         {
-            proxyImage?.Close();
-            return;
-        }
-        
-        if (proxyImage?.Image == null || proxyImage.ImageInfo == null)
-        {
-            proxyImage?.Close();
-            return;
-        }
+            if (_isStopping || _isDisposed == 1)
+                return;
 
-        if (!shouldProcessFrameRef.TryGetTarget(out var shouldProcess) || !shouldProcess())
-        {
-            proxyImage.Close();
-            return;
-        }
+            if (proxyImage?.Image == null || proxyImage.ImageInfo == null)
+                return;
 
-        if (onImageInfoRef.TryGetTarget(out var onImageInfo))
-        {
-            onImageInfo.Invoke(new FrameGeometry(proxyImage.Width, proxyImage.Height, proxyImage.ImageInfo.RotationDegrees));
-        }
-        
-        var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
+            if (!shouldProcessFrameRef.TryGetTarget(out var shouldProcess) || !shouldProcess())
+                return;
 
-        var completeListener = new CompleteListener(proxyImage);
-        
-        if (_scannerRef.TryGetTarget(out var scanner))
-        {
+            if (onImageInfoRef.TryGetTarget(out var onImageInfo))
+            {
+                onImageInfo.Invoke(new FrameGeometry(proxyImage.Width, proxyImage.Height, proxyImage.ImageInfo.RotationDegrees));
+            }
+
+            var inputImage = InputImage.FromMediaImage(proxyImage.Image, proxyImage.ImageInfo.RotationDegrees);
+
+            if (!_scannerRef.TryGetTarget(out var scanner))
+                return;
+
+            var completeListener = new CompleteListener(proxyImage);
             scanner.Process(inputImage)
                    .AddOnSuccessListener(_successListener)
                    .AddOnFailureListener(_failureListener)
                    .AddOnCompleteListener(completeListener);
+            handedOff = true;
         }
-        else
+        catch (Exception ex)
         {
-            proxyImage.Close();
+            // Reachable if the native Image/session is torn down concurrently with an in-flight
+            // Analyze() call (teardown races with the background analysis thread). Must not
+            // rethrow: an unhandled exception crossing back into the CameraX/JNI caller here
+            // terminates the process, not just this frame.
+            Log.Warn("BarcodeAnalyzer", $"Analyze failed, dropping frame: {ex.Message}");
+        }
+        finally
+        {
+            if (!handedOff)
+                SafeClose(proxyImage);
+        }
+    }
+
+    private static void SafeClose(IImageProxy? proxyImage)
+    {
+        try
+        {
+            proxyImage?.Close();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] Failed to close ImageProxy: {ex.Message}");
         }
     }
 
@@ -80,13 +102,13 @@ internal sealed class BarcodeAnalyzer(
         if (Interlocked.Exchange(ref _isDisposed, 1) == 1)
             return;
         _isStopping = true;
-        
+
         if (disposing)
         {
             _successListener?.MarkAsDead();
-            _failureListener?.Dispose();
+            _failureListener?.MarkAsDead();
         }
-        
+
         base.Dispose(disposing);
     }
 
@@ -141,29 +163,14 @@ internal sealed class BarcodeAnalyzer(
 
     private sealed class CompleteListener(IImageProxy? proxyImage) : Java.Lang.Object, IOnCompleteListener
     {
-        private volatile bool _isDisposed;
+        private int _closed;
 
         public void OnComplete(Android.Gms.Tasks.Task result)
         {
-            if (_isDisposed)
+            if (Interlocked.Exchange(ref _closed, 1) == 1)
                 return;
-            try
-            {
-                if (proxyImage is null) 
-                    return;
-                try
-                {
-                    proxyImage.Close();
-                }
-                catch (ObjectDisposedException)
-                {
-                    System.Diagnostics.Debug.WriteLine("Proxy image already disposed");
-                }
-            }
-            finally
-            {
-                _isDisposed = true;
-            }
+
+            SafeClose(proxyImage);
         }
     }
 }
