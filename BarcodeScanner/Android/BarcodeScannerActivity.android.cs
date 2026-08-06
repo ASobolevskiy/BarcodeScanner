@@ -21,7 +21,6 @@ using Google.Common.Util.Concurrent;
 using Java.Util.Concurrent;
 using Xamarin.Google.MLKit.Vision.BarCode;
 using Xamarin.Google.MLKit.Vision.Barcode.Common;
-using Exception = Java.Lang.Exception;
 using Size = Android.Util.Size;
 using MResource = _Microsoft.Android.Resource.Designer.Resource;
 
