@@ -246,7 +246,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             _onBarcodeDetectedDelegate = null;
             _shouldProcessFrameDelegate = null;
             _onImageInfoDelegate = null;
-            _latestFrameGeometry = null;
+            Volatile.Write(ref _latestFrameGeometry, null);
             
             System.Diagnostics.Debug.WriteLine("[BarcodeScanner] Cleanup completed");
         }
@@ -447,7 +447,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             _onBarcodeDetectedDelegate = OnBarcodesFound;
             _shouldProcessFrameDelegate = _detectionHandler!.ShouldProcessFrame;
-            _onImageInfoDelegate = geometry => _latestFrameGeometry = geometry;
+            _onImageInfoDelegate = geometry => Volatile.Write(ref _latestFrameGeometry, geometry);
 
             _barcodeAnalyser = new BarcodeAnalyzer(_barcodeScanner,
                                                    new WeakReference<Action<List<Barcode>>>(_onBarcodeDetectedDelegate),
@@ -580,7 +580,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             srcPoints[i * 2 + 1] = points[i].Y;
         }
 
-        var geometry = _latestFrameGeometry;
+        var geometry = Volatile.Read(ref _latestFrameGeometry);
         if (geometry is null)
             return null;
 

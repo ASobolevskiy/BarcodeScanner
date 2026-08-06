@@ -9,7 +9,7 @@ internal class ActivityLifecycleTracker : Java.Lang.Object, Application.IActivit
         get
         {
             Activity? activity = null;
-            currentActivity?.TryGetTarget(out activity);
+            Volatile.Read(ref currentActivity)?.TryGetTarget(out activity);
             return activity;
         }
     }
@@ -17,7 +17,7 @@ internal class ActivityLifecycleTracker : Java.Lang.Object, Application.IActivit
     public void OnActivityCreated(Activity activity, Bundle? savedInstanceState) { }
     public void OnActivityDestroyed(Activity activity) { }
     public void OnActivityPaused(Activity activity) { }
-    public void OnActivityResumed(Activity activity) => currentActivity = new WeakReference<Activity>(activity);
+    public void OnActivityResumed(Activity activity) => Volatile.Write(ref currentActivity, new WeakReference<Activity>(activity));
     public void OnActivitySaveInstanceState(Activity activity, Bundle outState) { }
     public void OnActivityStarted(Activity activity) { }
     public void OnActivityStopped(Activity activity) { }
