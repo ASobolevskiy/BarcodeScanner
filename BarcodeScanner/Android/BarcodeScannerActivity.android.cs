@@ -313,7 +313,15 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             overlayView = _overlayContainer;
             _activeOverlay = _overlayContainer;
         }
-        
+
+        if (overlayView.Parent is not null)
+        {
+            MobileBarcodeScanner.DispatchError(_instanceId,
+                "CustomOverlayFactory must return a fresh, unattached View for every scan session.");
+            Finish();
+            return false;
+        }
+
         _overlayView = overlayView;
         overlayView.Id = View.GenerateViewId();
 
