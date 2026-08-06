@@ -190,10 +190,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
                 }
                 if (_overlayContainer is not null)
                 {
+                    // Only dispose the overlay the library itself created. _overlayView can also
+                    // be a consumer-supplied view from CustomOverlayFactory — disposing that would
+                    // be an ownership violation, and if the consumer caches/reuses the instance
+                    // across scan sessions, the next session would touch an already-disposed ACW.
                     _overlayContainer.OnBackRequested -= CancelScan;
                     _overlayContainer.OnTorchToggle -= SetTorch;
+                    _overlayContainer.Dispose();
                 }
-                _overlayView?.Dispose();
                 _overlayView = null;
                 _overlayContainer = null;
             });
