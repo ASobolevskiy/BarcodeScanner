@@ -1,12 +1,24 @@
 using System;
 using System.Threading.Tasks;
 using BarcodeScanner.Models;
+using CoreFoundation;
+using Foundation;
 using UIKit;
 
 namespace BarcodeScanner;
 
 public partial class MobileBarcodeScanner
 {
+    private partial void PlatformPostToMain(Action action)
+    {
+        if (NSThread.IsMain)
+        {
+            action();
+            return;
+        }
+        DispatchQueue.MainQueue.DispatchAsync(action);
+    }
+
     private partial Task<BarcodeResult> PlatformScanSingleAsync()
     {
         var controller = new MetadataScanningController(InstanceId);

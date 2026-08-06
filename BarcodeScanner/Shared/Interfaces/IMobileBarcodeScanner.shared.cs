@@ -21,6 +21,7 @@ public interface IMobileBarcodeScanner
     /// completes with a null result, including for errors, cancellation, or auto-close.
     /// Calling this while a scan is already in progress on the same instance completes
     /// immediately with <see cref="ScanStatus.Error"/> instead of starting a second scan.
+    /// Awaiting from the UI thread resumes on the UI thread, as with any awaited <see cref="Task"/>.
     /// </returns>
     Task<BarcodeResult> ScanAsync(BarcodeScanningOptions? options = null);
 
@@ -33,7 +34,9 @@ public interface IMobileBarcodeScanner
     /// <param name="onResult">
     /// Invoked on every detection and never with null. Also invoked once with
     /// <see cref="ScanStatus.Error"/> if a scan is already in progress on the same instance,
-    /// instead of starting a second scan.
+    /// instead of starting a second scan. Always invoked on the main/UI thread — do not run
+    /// blocking or long-running work directly inside it, as that delays the camera preview and
+    /// overlay rendering; dispatch such work elsewhere yourself.
     /// </param>
     /// <returns>A task that completes when the continuous scan session ends.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="onResult"/> is null.</exception>
