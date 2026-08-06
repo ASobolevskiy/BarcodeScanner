@@ -33,22 +33,39 @@ internal sealed class BarcodeScannerOverlayWithButtons : UIView, IActiveScannerO
         _drawingView.LeadingAnchor.ConstraintEqualTo(LeadingAnchor).Active = true;
         _drawingView.TrailingAnchor.ConstraintEqualTo(TrailingAnchor).Active = true;
 
+        // Buttons are native subviews (AddSubview retains them), so their managed wrappers are
+        // unconditional GC roots for as long as they're on screen. A TouchUpInside closure
+        // capturing `this` directly would make this overlay reachable through that root forever
+        // — the .NET-for-iOS runtime can never collect a cycle crossing a natively-retained
+        // object. Capturing only a WeakReference avoids creating that edge.
+        var weakSelf = new WeakReference<BarcodeScannerOverlayWithButtons>(this);
+
         _btnBack = CreateCircleButton("❌");
         AddSubview(_btnBack);
         _btnBack.BottomAnchor.ConstraintEqualTo(BottomAnchor, -BUTTON_MARGIN).Active = true;
         _btnBack.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, BUTTON_MARGIN).Active = true;
-        _btnBack.TouchUpInside += (_, _) => OnBackRequested?.Invoke();
-        
+        _btnBack.TouchUpInside += (_, _) =>
+        {
+            if (weakSelf.TryGetTarget(out var self))
+                self.OnBackRequested?.Invoke();
+        };
+
         _btnTorch = CreateCircleButton("🔦");
         AddSubview(_btnTorch);
         _btnTorch.BottomAnchor.ConstraintEqualTo(BottomAnchor, -BUTTON_MARGIN).Active = true;
         _btnTorch.RightAnchor.ConstraintEqualTo(RightAnchor, -BUTTON_MARGIN).Active = true;
         _btnTorch.TouchUpInside += (_, _) =>
         {
-            _isTorchOn = !_isTorchOn;
-            UpdateTorchButtonAppearance();
-            OnTorchToggle?.Invoke(_isTorchOn);
+            if (weakSelf.TryGetTarget(out var self))
+                self.HandleTorchButtonTapped();
         };
+    }
+
+    private void HandleTorchButtonTapped()
+    {
+        _isTorchOn = !_isTorchOn;
+        UpdateTorchButtonAppearance();
+        OnTorchToggle?.Invoke(_isTorchOn);
     }
     
     private void UpdateTorchButtonAppearance()

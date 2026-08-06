@@ -30,6 +30,8 @@ internal class MetadataScanningController(
 
     private bool _isFinishing;
     private bool _isDismissed;
+    private bool _hasAppeared;
+    private bool _dismissPending;
     private int _delayBeforeClose;
 
     // GCD has no built-in "cancel a DispatchAfter block" primitive here (no DispatchWorkItem
@@ -78,9 +80,29 @@ internal class MetadataScanningController(
         UpdateRectOfInterest();
     }
 
-    public override void ViewWillDisappear(bool animated)
+    public override void ViewDidAppear(bool animated)
     {
-        base.ViewWillDisappear(animated);
+        base.ViewDidAppear(animated);
+        _hasAppeared = true;
+
+        if (_dismissPending)
+        {
+            _dismissPending = false;
+            DismissOnce();
+        }
+    }
+
+    public override void ViewDidDisappear(bool animated)
+    {
+        base.ViewDidDisappear(animated);
+
+        // ViewWillDisappear/ViewDidDisappear also fire when something is merely presented on
+        // top of this screen (e.g. a system permission alert), not only when this VC is actually
+        // being dismissed. Tearing the capture session down in that case would kill scanning for
+        // good and never restore the preview layer when the user returns.
+        if (!IsBeingDismissed)
+            return;
+
         if (_session is { } sessionToStop)
         {
             DispatchQueue.DefaultGlobalQueue.DispatchAsync(() =>
@@ -138,13 +160,23 @@ internal class MetadataScanningController(
         else
         {
             var defaultOverlay = new BarcodeScannerOverlayWithButtons();
+
+            // defaultOverlay is a native subview (View.subviews retains it), so its managed
+            // wrapper is an unconditional GC root for as long as it's on screen. A closure
+            // capturing `this` directly would make this controller reachable through that root
+            // forever, and the .NET-for-iOS runtime can never collect a cycle that crosses a
+            // natively-retained object. Capturing only a WeakReference avoids creating that edge.
+            var weakSelf = new WeakReference<MetadataScanningController>(this);
             defaultOverlay.OnBackRequested += () =>
             {
-                _isFinishing = true;
-                MobileBarcodeScanner.DispatchCancel(instanceId);
-                DismissOnce();
+                if (weakSelf.TryGetTarget(out var self))
+                    self.HandleOverlayBackRequested();
             };
-            defaultOverlay.OnTorchToggle += SetTorchInternal;
+            defaultOverlay.OnTorchToggle += turnOn =>
+            {
+                if (weakSelf.TryGetTarget(out var self))
+                    self.SetTorchInternal(turnOn);
+            };
 
             overlay = defaultOverlay;
             _activeOverlay = defaultOverlay;
@@ -400,6 +432,13 @@ internal class MetadataScanningController(
                                               () => DismissOnce());
     }
     
+    private void HandleOverlayBackRequested()
+    {
+        _isFinishing = true;
+        MobileBarcodeScanner.DispatchCancel(instanceId);
+        DismissOnce();
+    }
+
     private void SetTorchInternal(bool turnOn)
     {
         if (_cameraDevice is not { HasTorch: true }) return;
@@ -420,9 +459,24 @@ internal class MetadataScanningController(
     // Dismiss is idempotent because multiple independent paths can trigger it for the same
     // session (barcode found, back button, CancelScan/RequestCancel from the shared layer) —
     // all on the main queue, so a plain bool is enough; no volatile/Interlocked needed here.
+    //
+    // A call arriving before this controller has ever appeared (e.g. SetupCamera failing from
+    // within ViewDidLoad, before the presentation transition has completed) would have UIKit
+    // silently ignore DismissViewController — "presentation is in progress" — while _isDismissed
+    // was already latched true, permanently blocking every later legitimate dismiss attempt. So
+    // _isDismissed is only latched once a dismiss is actually issued; an earlier request is
+    // remembered in _dismissPending and retried from ViewDidAppear, which is guaranteed to fire
+    // once presentation has genuinely finished.
     private void DismissOnce()
     {
         if (_isDismissed) return;
+
+        if (!_hasAppeared)
+        {
+            _dismissPending = true;
+            return;
+        }
+
         _isDismissed = true;
         DismissViewController(true, null);
     }
