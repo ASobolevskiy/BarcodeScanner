@@ -83,8 +83,8 @@ internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOve
     protected override void OnDetachedFromWindow()
     {
         base.OnDetachedFromWindow();
-        _btnBack.Click -= OnBtnBackClick;
-        _btnTorch.Click -= OnBtnTorchClick;
+        _btnBack?.Click -= OnBtnBackClick;
+        _btnTorch?.Click -= OnBtnTorchClick;
     }
 
     private void OnBtnBackClick(object? s, EventArgs e)
@@ -157,7 +157,7 @@ internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOve
             _btnBack = null;
             _btnTorch?.Dispose();
             _btnTorch = null;
-            _drawingView.Dispose();
+            _drawingView?.Dispose();
         }
         base.Dispose(disposing);
     }
