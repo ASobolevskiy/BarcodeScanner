@@ -8,6 +8,11 @@ namespace BarcodeScanner;
 /// the scan engine — detected barcode positions, region-of-interest sync, and reset
 /// notifications. The library's built-in overlays implement this interface internally.
 /// </summary>
+/// <remarks>
+/// ⚠️ WARNING: see <see cref="BarcodeScanningOptions.CustomOverlayFactory"/> for the ownership
+/// contract — the library never disposes a custom overlay, and the factory must return a fresh
+/// instance per scan session, not a cached/reused one.
+/// </remarks>
 public interface IActiveScannerOverlay
 {
     /// <summary>
