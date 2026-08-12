@@ -21,6 +21,24 @@ public partial class MobileBarcodeScanner
 
     private partial void PlatformStartScanner(string sessionId)
     {
+        // UIKit (GetCurrentViewController/PresentViewController) may only be touched on the
+        // main thread - unlike Android's StartActivity, which is safe from any thread. Nothing
+        // in the public ScanAsync/ScanContinuouslyAsync contract forbids calling from a
+        // background thread, so this hop is required for parity with Android rather than
+        // pushing that requirement onto every consumer (CONC-05 in CONTEXT.md). Dispatched
+        // synchronously (not via PlatformPostToMain's fire-and-forget DispatchAsync) so any
+        // exception thrown while presenting still propagates back to the caller's try/catch in
+        // ScanAsync/ScanContinuouslyAsync instead of being lost on the main queue.
+        if (NSThread.IsMain)
+        {
+            PresentScanner(sessionId);
+            return;
+        }
+        DispatchQueue.MainQueue.DispatchSync(() => PresentScanner(sessionId));
+    }
+
+    private void PresentScanner(string sessionId)
+    {
         var controller = new MetadataScanningController(sessionId)
         {
             ModalPresentationStyle = UIModalPresentationStyle.FullScreen
