@@ -19,20 +19,13 @@ public partial class MobileBarcodeScanner
         DispatchQueue.MainQueue.DispatchAsync(action);
     }
 
-    private partial Task<BarcodeResult> PlatformScanSingleAsync()
+    private partial void PlatformStartScanner(string sessionId)
     {
-        var controller = new MetadataScanningController(InstanceId);
-        controller.ModalPresentationStyle = UIModalPresentationStyle.FullScreen;
+        var controller = new MetadataScanningController(sessionId)
+        {
+            ModalPresentationStyle = UIModalPresentationStyle.FullScreen
+        };
         GetCurrentViewController().PresentViewController(controller, true, null);
-        return _singleScanTcs!.Task;
-    }
-
-    private partial Task PlatformScanContinuousAsync()
-    {
-        var controller = new MetadataScanningController(InstanceId);
-        controller.ModalPresentationStyle = UIModalPresentationStyle.FullScreen;
-        GetCurrentViewController().PresentViewController(controller, true, null);
-        return _continuousScanTcs!.Task;
     }
     
     private UIViewController GetCurrentViewController()

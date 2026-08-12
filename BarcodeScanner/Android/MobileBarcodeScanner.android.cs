@@ -21,28 +21,15 @@ public partial class MobileBarcodeScanner
         MainHandler.Post(action);
     }
 
-    private partial Task<BarcodeResult> PlatformScanSingleAsync()
+    private partial void PlatformStartScanner(string sessionId)
     {
-        var intent = CreateIntent();
-        GetCurrentActivity().StartActivity(intent);
-        return _singleScanTcs!.Task;
+        var activity = GetCurrentActivity();
+        var intent = new Intent(activity, typeof(BarcodeScannerActivity));
+        intent.PutExtra("scanner_instance_id", sessionId);
+        activity.StartActivity(intent);
     }
 
-    private partial Task PlatformScanContinuousAsync()
-    {
-        var intent = CreateIntent();
-        GetCurrentActivity().StartActivity(intent);
-        return _continuousScanTcs!.Task;
-    }
-    
-    private Intent CreateIntent()
-    {
-        var intent = new Intent(GetCurrentActivity(), typeof(BarcodeScannerActivity));
-        intent.PutExtra("scanner_instance_id", InstanceId);
-        return intent;
-    }
-    
-    private Activity GetCurrentActivity() => 
+    private Activity GetCurrentActivity() =>
         MobileBarcodeScannerPlatform.GetCurrentActivity() 
         ?? throw new InvalidOperationException("Failed to get current Activity.");
 }
