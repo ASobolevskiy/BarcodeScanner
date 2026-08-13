@@ -111,7 +111,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
         if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Permission.Granted)
         {
-            SetupScanner(_options);
+            if (!SetupScanner(_options))
+                return;
             SetupCamera();
         }
         else
@@ -374,14 +375,29 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         }
     }
 
-    private void SetupScanner(BarcodeScanningOptions options)
+    private bool SetupScanner(BarcodeScanningOptions options)
     {
-        var mlFormats = ResolveMlKitFormats(options.PossibleFormats);
+        // Guarded for the same reason as SetupOverlay: called from OnCreate/OnRequestPermissionsResult,
+        // neither of which has an enclosing try/catch, and BarcodeScanning.GetClient(...) reaches into
+        // Play Services / ML Kit's native bridge, which can genuinely throw (AND-01 in CONTEXT.md).
+        try
+        {
+            var mlFormats = ResolveMlKitFormats(options.PossibleFormats);
 
-        var mlOptions = new BarcodeScannerOptions.Builder()
-                        .SetBarcodeFormats(mlFormats[0], mlFormats.Skip(1).ToArray())
-                        .Build();
-        _barcodeScanner = BarcodeScanning.GetClient(mlOptions);
+            var mlOptions = new BarcodeScannerOptions.Builder()
+                            .SetBarcodeFormats(mlFormats[0], mlFormats.Skip(1).ToArray())
+                            .Build();
+            _barcodeScanner = BarcodeScanning.GetClient(mlOptions);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] SetupScanner failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
+            MobileBarcodeScanner.DispatchError(_instanceId, $"Failed to set up barcode scanner: {ex.Message}");
+            Finish();
+            return false;
+        }
     }
 
     /// <summary>
@@ -414,11 +430,21 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     {
         if (_barcodeScanner == null)
             return;
-        
-        _cameraProviderFuture = ProcessCameraProvider.GetInstance(this);
-        _cameraProviderRunnable = new CameraProviderRunnable(new WeakReference<BarcodeScannerActivity>(this));
-        _cameraProviderFuture?.AddListener(_cameraProviderRunnable,
-                                           ContextCompat.GetMainExecutor(this));
+
+        try
+        {
+            _cameraProviderFuture = ProcessCameraProvider.GetInstance(this);
+            _cameraProviderRunnable = new CameraProviderRunnable(new WeakReference<BarcodeScannerActivity>(this));
+            _cameraProviderFuture?.AddListener(_cameraProviderRunnable,
+                                               ContextCompat.GetMainExecutor(this));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] SetupCamera failed: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
+            MobileBarcodeScanner.DispatchError(_instanceId, $"Failed to set up camera: {ex.Message}");
+            Finish();
+        }
     }
 
     private void SetupCameraProvider()
@@ -638,10 +664,11 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_instanceId)) 
+        if (string.IsNullOrWhiteSpace(_instanceId))
             return;
         var options = MobileBarcodeScanner.GetOptions(_instanceId);
-        SetupScanner(options);
+        if (!SetupScanner(options))
+            return;
         SetupCamera();
     }
 
