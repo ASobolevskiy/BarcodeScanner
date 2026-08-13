@@ -142,67 +142,88 @@ internal class MetadataScanningController(
 
     private bool SetupOverlay(UIView parentView, BarcodeScanningOptions options)
     {
-        UIView overlay;
-        if (options.CustomOverlayFactory != null)
+        // Guards the whole body because it calls into arbitrary consumer code
+        // (CustomOverlayFactory) with no way to know what it might throw. SetupOverlay runs from
+        // ViewDidLoad, which has no enclosing try/catch above it - confirmed on-device: an
+        // unhandled exception here is silently swallowed somewhere below ViewDidLoad instead of
+        // reaching ScanAsync's own catch, leaving the scanner screen never shown and the
+        // caller's Task hanging forever. Mirrors Android's fix in commit 013e0d6 (CONC-03 in
+        // CONTEXT.md).
+        try
         {
-            var overlayInstance = options.CustomOverlayFactory(this);
-            if(overlayInstance is not UIView view)
+            UIView overlay;
+            if (options.CustomOverlayFactory != null)
             {
-                MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must return UIKit.UIView");
-                DismissOnce();
-                return false;
+                var overlayInstance = options.CustomOverlayFactory(this);
+                if(overlayInstance is not UIView view)
+                {
+                    MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must return UIKit.UIView");
+                    DismissOnce();
+                    return false;
+                }
+
+                overlay = view;
+                if(overlayInstance is IActiveScannerOverlay activeOverlay)
+                    _activeOverlay = activeOverlay;
+            }
+            else
+            {
+                var defaultOverlay = new BarcodeScannerOverlayWithButtons();
+
+                // defaultOverlay is a native subview (View.subviews retains it), so its managed
+                // wrapper is an unconditional GC root for as long as it's on screen. A closure
+                // capturing `this` directly would make this controller reachable through that root
+                // forever, and the .NET-for-iOS runtime can never collect a cycle that crosses a
+                // natively-retained object. Capturing only a WeakReference avoids creating that edge.
+                var weakSelf = new WeakReference<MetadataScanningController>(this);
+                defaultOverlay.OnBackRequested += () =>
+                {
+                    if (weakSelf.TryGetTarget(out var self))
+                        self.HandleOverlayBackRequested();
+                };
+                defaultOverlay.OnTorchToggle += turnOn =>
+                {
+                    if (weakSelf.TryGetTarget(out var self))
+                        self.SetTorchInternal(turnOn);
+                };
+
+                overlay = defaultOverlay;
+                _activeOverlay = defaultOverlay;
             }
 
-            overlay = view;
-            if(overlayInstance is IActiveScannerOverlay activeOverlay)
-                _activeOverlay = activeOverlay;
-        }
-        else
-        {
-            var defaultOverlay = new BarcodeScannerOverlayWithButtons();
+            _overlayView = overlay;
+            _overlayView.TranslatesAutoresizingMaskIntoConstraints = false;
+            View?.Add(_overlayView);
 
-            // defaultOverlay is a native subview (View.subviews retains it), so its managed
-            // wrapper is an unconditional GC root for as long as it's on screen. A closure
-            // capturing `this` directly would make this controller reachable through that root
-            // forever, and the .NET-for-iOS runtime can never collect a cycle that crosses a
-            // natively-retained object. Capturing only a WeakReference avoids creating that edge.
-            var weakSelf = new WeakReference<MetadataScanningController>(this);
-            defaultOverlay.OnBackRequested += () =>
-            {
-                if (weakSelf.TryGetTarget(out var self))
-                    self.HandleOverlayBackRequested();
-            };
-            defaultOverlay.OnTorchToggle += turnOn =>
-            {
-                if (weakSelf.TryGetTarget(out var self))
-                    self.SetTorchInternal(turnOn);
-            };
+            _overlayView.TopAnchor.ConstraintEqualTo(parentView.TopAnchor).Active = true;
+            _overlayView.BottomAnchor.ConstraintEqualTo(parentView.BottomAnchor).Active = true;
+            _overlayView.LeadingAnchor.ConstraintEqualTo(parentView.LeadingAnchor).Active = true;
+            _overlayView.TrailingAnchor.ConstraintEqualTo(parentView.TrailingAnchor).Active = true;
 
-            overlay = defaultOverlay;
-            _activeOverlay = defaultOverlay;
-        }
-        
-        _overlayView = overlay;
-        _overlayView.TranslatesAutoresizingMaskIntoConstraints = false;
-        View?.Add(_overlayView);
-        
-        _overlayView.TopAnchor.ConstraintEqualTo(parentView.TopAnchor).Active = true;
-        _overlayView.BottomAnchor.ConstraintEqualTo(parentView.BottomAnchor).Active = true;
-        _overlayView.LeadingAnchor.ConstraintEqualTo(parentView.LeadingAnchor).Active = true;
-        _overlayView.TrailingAnchor.ConstraintEqualTo(parentView.TrailingAnchor).Active = true;
-        
-        if(options.RegionOfInterest is {IsValid: true} roi)
-            _activeOverlay?.SyncRegionOfInterest(roi);
-        
+            if(options.RegionOfInterest is {IsValid: true} roi)
+                _activeOverlay?.SyncRegionOfInterest(roi);
+
 #if DEBUG
-        if (options is { RegionOfInterest.IsValid: true, CustomOverlayFactory: not null })
-        {
-            Console.WriteLine("[BarcodeScanner] [WARN] RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
-                              "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
-        }
+            if (options is { RegionOfInterest.IsValid: true, CustomOverlayFactory: not null })
+            {
+                Console.WriteLine("[BarcodeScanner] [WARN] RegionOfInterest is set together with custom overlay. The drawn viewfinder may not" +
+                                  "match the actual scanning area unless the overlay implements IActiveScannerOverlay.SyncRegionOfInterest.");
+            }
 #endif
 
-        return true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Deliberately no extra cleanup here: _overlayView is only ever read inside this
+            // same method (verified across the file), so returning early leaves nothing
+            // dangling for ViewDidDisappear/DismissOnce to trip over.
+            Debug.WriteLine($"[BarcodeScanner] SetupOverlay failed: {ex.Message}");
+            Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
+            MobileBarcodeScanner.DispatchError(instanceId, $"Failed to set up scanner overlay: {ex.Message}");
+            DismissOnce();
+            return false;
+        }
     }
 
     private void SetupCamera(UIView parentView, BarcodeScanningOptions options)
