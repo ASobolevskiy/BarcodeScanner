@@ -29,7 +29,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     private TaskCompletionSource<BarcodeResult>? _singleScanTcs;
     private TaskCompletionSource? _continuousScanTcs;
-    private Action<BarcodeResult?>? _continuousCallback;
+    private Action<BarcodeResult>? _continuousCallback;
 
     // 0 = idle, 1 = a scan is in progress. Claimed atomically via CompareExchange so two concurrent
     // ScanAsync/ScanContinuouslyAsync calls on the same instance can't both pass the guard (TOCTOU).
@@ -111,7 +111,7 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     /// <inheritdoc/>
     public Task ScanContinuouslyAsync(
-        Action<BarcodeResult?> onResult,
+        Action<BarcodeResult> onResult,
         BarcodeScanningOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(onResult);

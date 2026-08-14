@@ -41,7 +41,7 @@ public interface IMobileBarcodeScanner
     /// <returns>A task that completes when the continuous scan session ends.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="onResult"/> is null.</exception>
     Task ScanContinuouslyAsync(
-        Action<BarcodeResult?> onResult,
+        Action<BarcodeResult> onResult,
         BarcodeScanningOptions? options = null);
 
     /// <summary>

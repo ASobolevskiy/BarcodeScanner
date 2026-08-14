@@ -103,11 +103,8 @@ public class MainActivity : AppCompatActivity
     }
 
     
-    private void HandleBarcodeResult(BarcodeResult? result)
+    private void HandleBarcodeResult(BarcodeResult result)
     {
-        if(result != null)
-        {
-            System.Diagnostics.Debug.WriteLine($"Found code: {result}\nTime scanned: {result.ScannedTime}");
-        }
+        System.Diagnostics.Debug.WriteLine($"Found code: {result}\nTime scanned: {result.ScannedTime}");
     }
 }
