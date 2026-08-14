@@ -316,6 +316,9 @@ internal class MetadataScanningController(
         if(!_isScanning || _detectionHandler is null)
             return;
 
+        if (!_detectionHandler.ShouldProcessFrame())
+            return;
+
         var barcodeDataList = new List<BarcodeData>();
         if (metadataObjects is { Length: > 0 })
         {
