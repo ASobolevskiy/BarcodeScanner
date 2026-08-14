@@ -43,10 +43,19 @@ public interface IActiveScannerOverlay
     ViewFinderRect GetViewfinderRect();
 
     /// <summary>
-    /// This will by called once on scanning start if the BarcodeScanningOptions.RegionOfInterest is set
-    /// so the default overlays could sync their animated frames to respect set value.
-    /// Custom overlays may not override this - then visual frame and actual ROI can mismatch
+    /// Called once when scanning starts if <see cref="BarcodeScanningOptions.RegionOfInterest"/>
+    /// is set, so the overlay can sync its drawn viewfinder frame to match it.
     /// </summary>
+    /// <remarks>
+    /// This is a default interface method with an empty body, so overriding it is optional. The
+    /// built-in overlays override it to keep their drawn frame in sync automatically. A custom
+    /// overlay may do the same; one that doesn't override it simply ignores the call, and its
+    /// visual frame may not match the actual detection area.
+    /// </remarks>
+    /// <param name="roi">
+    /// The active region of interest, in the same relative (0.0–1.0) coordinate space as
+    /// <see cref="BarcodeScanningOptions.RegionOfInterest"/>.
+    /// </param>
     void SyncRegionOfInterest(RoiRect roi)
     {
     }
