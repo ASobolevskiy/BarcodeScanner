@@ -20,6 +20,21 @@ internal class MetadataScanningController(
     private UIView _overlayView;
     private IActiveScannerOverlay? _activeOverlay;
     private BarcodeDetectionHandler? _detectionHandler;
+
+    // Reused across HandleDetectedCodes calls instead of allocating a new List every frame
+    // (IOS-04 in CONTEXT.md). Safe: HandleDetectedCodes always runs on the single serial
+    // _metadataQueue below, and BarcodeDetectionHandler.Process only reads from this list
+    // synchronously - it never retains a reference to it past the call.
+    private readonly List<BarcodeData> _barcodeBuffer = [];
+
+    // Cached once instead of allocating a fresh closure on every HandleResult call whose
+    // ShouldResetOverlay branch fires - the by far most common case while scanning (no barcode
+    // currently in the ROI). Unlike the sibling UpdateOverlay dispatch, this one needs no
+    // per-call data, so a single reused delegate is safe.
+    private Action _clearOverlayAction;
+
+    private void ClearOverlayOnMain() => _activeOverlay?.ClearOverlay();
+
     private AVCaptureSession? _session;
     private AVCaptureDevice? _cameraDevice;
     private AVCaptureMetadataOutput? _metadataOutput;
@@ -64,6 +79,7 @@ internal class MetadataScanningController(
 
         _options = MobileBarcodeScanner.GetOptions(instanceId);
         _detectionHandler = new BarcodeDetectionHandler(_options);
+        _clearOverlayAction = ClearOverlayOnMain;
         ApplyOptions(_options);
         if (!SetupOverlay(view, _options))
             return;
@@ -326,7 +342,7 @@ internal class MetadataScanningController(
         if (!_detectionHandler.ShouldProcessFrame())
             return;
 
-        var barcodeDataList = new List<BarcodeData>();
+        _barcodeBuffer.Clear();
         if (metadataObjects is { Length: > 0 })
         {
             foreach (var metadataObject in metadataObjects)
@@ -338,19 +354,19 @@ internal class MetadataScanningController(
                     var floatPoints = transformed?.Corners.ToFloatArray();
                     if (floatPoints is { Length: 8 })
                     {
-                        barcodeDataList.Add(new BarcodeData(
-                                                            codeObject.StringValue,
-                                                            codeObject.StringValue,
-                                                            codeObject.Type.ToLocalFormat(),
-                                                            floatPoints));
+                        _barcodeBuffer.Add(new BarcodeData(
+                                                           codeObject.StringValue,
+                                                           codeObject.StringValue,
+                                                           codeObject.Type.ToLocalFormat(),
+                                                           floatPoints));
                     }
                 }
             }
         }
-        
+
         var snapshot = _publishedRoi;
         var roi = new RoiBounds(snapshot.Left, snapshot.Top, snapshot.Right, snapshot.Bottom);
-        var result = _detectionHandler.Process(barcodeDataList, roi);
+        var result = _detectionHandler.Process(_barcodeBuffer, roi);
         
         if (result is null) return;
         var value = result.Value;
@@ -362,7 +378,7 @@ internal class MetadataScanningController(
     {
         if (result.ShouldResetOverlay)
         {
-            DispatchQueue.MainQueue.DispatchAsync(() => _activeOverlay?.ClearOverlay());
+            DispatchQueue.MainQueue.DispatchAsync(_clearOverlayAction);
             return;
         }
         
