@@ -111,8 +111,8 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
     /// <inheritdoc/>
     public Task ScanContinuouslyAsync(
-        BarcodeScanningOptions? options,
-        Action<BarcodeResult?> onResult)
+        Action<BarcodeResult?> onResult,
+        BarcodeScanningOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(onResult);
 

@@ -30,7 +30,6 @@ public interface IMobileBarcodeScanner
     /// for every detected barcode until <see cref="CancelScan"/> is called or the scanner is
     /// dismissed by the user.
     /// </summary>
-    /// <param name="options">Scanning options. If null, default options are used.</param>
     /// <param name="onResult">
     /// Invoked on every detection and never with null. Also invoked once with
     /// <see cref="ScanStatus.Error"/> if a scan is already in progress on the same instance,
@@ -38,11 +37,12 @@ public interface IMobileBarcodeScanner
     /// blocking or long-running work directly inside it, as that delays the camera preview and
     /// overlay rendering; dispatch such work elsewhere yourself.
     /// </param>
+    /// <param name="options">Scanning options. If null, default options are used.</param>
     /// <returns>A task that completes when the continuous scan session ends.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="onResult"/> is null.</exception>
     Task ScanContinuouslyAsync(
-        BarcodeScanningOptions? options,
-        Action<BarcodeResult?> onResult);
+        Action<BarcodeResult?> onResult,
+        BarcodeScanningOptions? options = null);
 
     /// <summary>
     /// Cancels the in-progress scan started by <see cref="ScanAsync"/> or

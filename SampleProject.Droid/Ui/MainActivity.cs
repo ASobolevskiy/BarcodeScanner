@@ -43,7 +43,7 @@ public class MainActivity : AppCompatActivity
             {
                 PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
             };
-            await scanner.ScanContinuouslyAsync(options, HandleBarcodeResult);
+            await scanner.ScanContinuouslyAsync(HandleBarcodeResult, options);
         };
 
         _buttonScanWithAutoClose.Click += async (_, _) =>

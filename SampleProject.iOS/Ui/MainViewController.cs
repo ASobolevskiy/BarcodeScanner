@@ -46,7 +46,7 @@ public class MainViewController : UIViewController
             {
                 PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
             };
-            await scanner.ScanContinuouslyAsync(options, HandleBarcodeResult);
+            await scanner.ScanContinuouslyAsync(HandleBarcodeResult, options);
         };
     }
 
