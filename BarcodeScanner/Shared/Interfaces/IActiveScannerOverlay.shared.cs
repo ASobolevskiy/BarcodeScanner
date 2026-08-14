@@ -35,9 +35,11 @@ public interface IActiveScannerOverlay
     void UpdateOverlay(string? barcodeValue, float[] targetPoints);
 
     /// <summary>
-    /// The barcode detection area (in px) drawn by this overlay
-    /// <remarks>Library uses this value if the BarcodeScanningOptions.RegionOfInterest is not set</remarks>
+    /// The barcode detection area (in px) drawn by this overlay.
     /// </summary>
+    /// <remarks>
+    /// Library uses this value if the <see cref="BarcodeScanningOptions.RegionOfInterest"/> is not set.
+    /// </remarks>
     ViewFinderRect GetViewfinderRect();
 
     /// <summary>
