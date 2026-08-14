@@ -128,7 +128,7 @@ public sealed class BarcodeScanningOptions
         Math.Max(0, Math.Min(DelayBeforeOverlayReset, DelayBetweenContinuousScans));
 }
 
-public enum ScanType
+internal enum ScanType
 {
     OneShot,
     Continuous

@@ -7,7 +7,7 @@ internal readonly record struct DetectionResult
     public BarcodeSymbology Symbology { get; init; }
     public float[]? SmoothedPoints { get; init; }
     public bool ShouldResetOverlay { get; init; }
-    public ScanType ScanType { get; init; }
+    internal ScanType ScanType { get; init; }
 }
 
 internal readonly record struct BarcodeData(
