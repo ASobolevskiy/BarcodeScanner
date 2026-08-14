@@ -28,6 +28,13 @@ internal class MetadataScanningController(
     
     private DispatchQueue? _metadataQueue;
 
+    // Single serial queue for the whole AVCaptureSession lifecycle (start + stop). Both
+    // StartRunning() and StopRunning() are blocking calls that must never run concurrently with
+    // each other on the same session (IOS-03 in CONTEXT.md) - a serial queue gives that guarantee
+    // for free (one block at a time, in submission order), the same way the main-thread queue used
+    // to (accidentally, at the cost of blocking UI) before this queue existed.
+    private readonly DispatchQueue _sessionQueue = new("sessionQueue");
+
     private bool _isFinishing;
     private bool _isDismissed;
     private bool _hasAppeared;
@@ -62,7 +69,7 @@ internal class MetadataScanningController(
             return;
         SetupCamera(view, _options);
         
-        DispatchQueue.MainQueue.DispatchAsync(() => _session?.StartRunning());
+        _sessionQueue.DispatchAsync(() => _session?.StartRunning());
     }
 
     public override void ViewDidLayoutSubviews()
@@ -105,7 +112,7 @@ internal class MetadataScanningController(
 
         if (_session is { } sessionToStop)
         {
-            DispatchQueue.DefaultGlobalQueue.DispatchAsync(() =>
+            _sessionQueue.DispatchAsync(() =>
             {
                 try
                 {
