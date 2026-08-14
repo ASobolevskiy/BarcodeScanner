@@ -35,16 +35,16 @@ public sealed record BarcodeResult
 
     /// <summary>
     /// The raw decoded barcode content. Populated when <see cref="Status"/> is
-    /// <see cref="ScanStatus.Success"/>.
+    /// <see cref="ScanStatus.Success"/>; empty string otherwise.
     /// </summary>
-    public string? RawValue { get; init; } = string.Empty;
+    public string RawValue { get; init; } = string.Empty;
 
     /// <summary>
     /// A display-friendly version of the decoded content, which may differ from
     /// <see cref="RawValue"/> depending on the barcode format. Populated when
-    /// <see cref="Status"/> is <see cref="ScanStatus.Success"/>.
+    /// <see cref="Status"/> is <see cref="ScanStatus.Success"/>; empty string otherwise.
     /// </summary>
-    public string? DisplayValue { get; init; } = string.Empty;
+    public string DisplayValue { get; init; } = string.Empty;
 
     /// <summary>
     /// When the barcode was scanned. Null unless <see cref="Status"/> is
