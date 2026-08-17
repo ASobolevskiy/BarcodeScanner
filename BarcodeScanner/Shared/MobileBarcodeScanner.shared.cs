@@ -39,7 +39,12 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     private CancellationTokenSource? _autoCloseCts;
     private CancellationTokenRegistration? _autoCloseRegistration;
 
-    private bool _isTorchOn;
+    // 0 = off, 1 = on. Stored as int (not bool) so the toggle can be done atomically via
+    // Interlocked.CompareExchange - a plain bool read-modify-write here loses updates under
+    // concurrent ToggleTorch() calls (e.g. an external hardware trigger racing a custom overlay's
+    // own torch button), leaving tracked state out of sync with the real hardware (CONC-07 in
+    // CONTEXT.md).
+    private int _isTorchOnState;
 
     /// <inheritdoc/>
     public Task<BarcodeResult> ScanAsync(BarcodeScanningOptions? options = null)
@@ -247,12 +252,18 @@ public partial class MobileBarcodeScanner : IMobileBarcodeScanner
     /// <inheritdoc/>
     public void ToggleTorch()
     {
-        _isTorchOn = !_isTorchOn;
+        int oldState, newState;
+        do
+        {
+            oldState = Volatile.Read(ref _isTorchOnState);
+            newState = oldState == 0 ? 1 : 0;
+        } while (Interlocked.CompareExchange(ref _isTorchOnState, newState, oldState) != oldState);
 
+        var isTorchOn = newState != 0;
         var sessionId = Volatile.Read(ref _sessionId);
         if (sessionId is not null && Registrations.TryGetValue(sessionId, out var reg) && reg.PlatformSession != null)
         {
-            reg.PlatformSession.SetTorch(_isTorchOn);
+            reg.PlatformSession.SetTorch(isTorchOn);
         }
     }
 
