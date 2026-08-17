@@ -1,15 +1,26 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Threading;
 using BarcodeScanner.Helpers;
 using BarcodeScanner.Models;
 
 namespace BarcodeScanner;
 
+// No internal synchronization by design - Process() runs on a per-frame hot path. Safe only
+// because every real caller never invokes Process() concurrently with itself on a given instance
+// (Android: RunOnUiThread; iOS: the same serial metadata dispatch queue's mutual-exclusion
+// guarantee that also drives ShouldProcessFrame). Note this is NOT "always the same physical
+// thread" - GCD serial queues guarantee one block at a time, not thread affinity across calls -
+// and Process()/ShouldProcessFrame() are NOT required to share a thread with each other either:
+// on Android they intentionally run on different ones (analysis executor vs UI thread). Each just
+// needs to never overlap with itself. Nothing here enforces that from inside the type; see
+// EnterExclusiveRegion below for the Debug-only tripwire if that guarantee is ever broken.
 internal sealed class BarcodeDetectionHandler(
     BarcodeScanningOptions options)
 {
     private const float SMOOTH_FACTOR_CENTER = 0.15f;
     private const float SMOOTH_FACTOR_SIZE = 0.3f;
-    
+
     private readonly FrameThrottler _throttler = new(options.DelayBeforeAnalyzingFrames,
                                                      options.DelayBetweenAnalyzingFrames);
     private readonly int _delayBetweenScans = options.DelayBetweenContinuousScans;
@@ -18,16 +29,40 @@ internal sealed class BarcodeDetectionHandler(
     private readonly List<(BarcodeData Data, float Distance)> _candidatesBuffer = [];
     private BarcodeBox? _lastBox;
     private string? _lastKey;
-    
+
     private long _lastScannedTimeMs;
     private string? _lastSelectedBarcodeValue;
-    
+
+#if DEBUG
+    private int _reentrancyGuard;
+
+    private void EnterExclusiveRegion()
+    {
+        // The Interlocked.Exchange is deliberately its own statement, not inlined into the
+        // Debug.Assert call: Debug.Assert carries [Conditional("DEBUG")], which makes the compiler
+        // drop the entire call - arguments included - wherever DEBUG isn't defined. An inlined
+        // Interlocked.Exchange would then silently stop running instead of just stopping asserting.
+        var wasAlreadyInside = Interlocked.Exchange(ref _reentrancyGuard, 1) != 0;
+        Debug.Assert(!wasAlreadyInside,
+            "Process was entered concurrently from more than one thread. This type has no " +
+            "internal synchronization and relies entirely on the platform caller never invoking " +
+            "it concurrently with itself (Android: RunOnUiThread; iOS: the serial metadata queue).");
+    }
+
+    private void ExitExclusiveRegion() => Interlocked.Exchange(ref _reentrancyGuard, 0);
+#endif
+
     public bool ShouldProcessFrame() => _throttler.ShouldAnalyze();
 
     public DetectionResult? Process(
         IList<BarcodeData> detectedBarcodes,
         RoiBounds roi)
     {
+#if DEBUG
+        EnterExclusiveRegion();
+        try
+        {
+#endif
         if (detectedBarcodes.Count is 0)
         {
             _lastScannedTimeMs = 0;
@@ -41,14 +76,14 @@ internal sealed class BarcodeDetectionHandler(
         var currentTimeMs = TimeHelper.GetCurrentTimeMs();
         if (_scanType == ScanType.Continuous && currentTimeMs - _lastScannedTimeMs < _delayBetweenScans)
             return null;
-        
+
         var barcodeData = targetCode.Value.Data;
         if (string.IsNullOrWhiteSpace(barcodeData.RawValue))
             return null;
-        
+
         _lastScannedTimeMs = currentTimeMs;
         _lastSelectedBarcodeValue = barcodeData.RawValue;
-        
+
         var smoothedPoints = ApplySmoothing(barcodeData.RawValue, barcodeData.ScreenCornerPoints, roi);
 
         return new DetectionResult
@@ -59,6 +94,13 @@ internal sealed class BarcodeDetectionHandler(
             SmoothedPoints = smoothedPoints,
             ScanType = _scanType
         };
+#if DEBUG
+        }
+        finally
+        {
+            ExitExclusiveRegion();
+        }
+#endif
     }
     
     private (BarcodeData Data, float Distance)? SelectBestBarcode(IList<BarcodeData> codes, RoiBounds roi)
