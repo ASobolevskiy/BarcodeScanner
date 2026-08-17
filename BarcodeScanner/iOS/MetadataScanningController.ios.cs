@@ -40,8 +40,18 @@ internal class MetadataScanningController(
     private AVCaptureMetadataOutput? _metadataOutput;
     private AVCaptureVideoPreviewLayer? _previewLayer;
     private MetadataOutputDelegate? _metadataOutputDelegate;
-    
+
     private DispatchQueue? _metadataQueue;
+
+    // A SetTorch() call that arrives before SetupCamera assigns _cameraDevice is remembered here
+    // instead of being silently dropped. SetTorch()/SetTorchInternal() can be invoked from any
+    // thread - ToggleTorch() on the shared side has no main-thread requirement - while SetupCamera
+    // always runs on the main thread as part of ViewDidLoad, so this uses Interlocked rather than
+    // a plain field. bool? can't be volatile, hence the tri-state int.
+    private const int NoPendingTorchRequest = 0;
+    private const int PendingTorchOn = 1;
+    private const int PendingTorchOff = 2;
+    private int _pendingTorchState;
 
     // Single serial queue for the whole AVCaptureSession lifecycle (start + stop). Both
     // StartRunning() and StopRunning() are blocking calls that must never run concurrently with
@@ -260,6 +270,10 @@ internal class MetadataScanningController(
             DismissOnce();
             return;
         }
+
+        var pendingTorch = Interlocked.Exchange(ref _pendingTorchState, NoPendingTorchRequest);
+        if (pendingTorch != NoPendingTorchRequest)
+            SetTorchInternal(pendingTorch == PendingTorchOn);
 
         var input = new AVCaptureDeviceInput(_cameraDevice, out var error);
         if (error is not null || !_session.CanAddInput(input))
@@ -489,6 +503,14 @@ internal class MetadataScanningController(
 
     private void SetTorchInternal(bool turnOn)
     {
+        if (_cameraDevice is null)
+        {
+            // SetupCamera hasn't assigned _cameraDevice yet - remember the request and replay it
+            // from SetupCamera once the device exists, instead of silently dropping it.
+            Interlocked.Exchange(ref _pendingTorchState, turnOn ? PendingTorchOn : PendingTorchOff);
+            return;
+        }
+
         if (_cameraDevice is not { HasTorch: true }) return;
 
         _cameraDevice.LockForConfiguration(out var error);
