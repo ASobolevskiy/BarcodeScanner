@@ -657,6 +657,16 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
     {
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        // Mirrors the guard already used for the other async OS callback in this file
+        // (SetupCameraProvider/CameraProviderRunnable) - defensive consistency for the same
+        // class of "callback lands after Finish() but before/without OnDestroy fully tearing
+        // things down" scenario (CONC-08 in CONTEXT.md), not a confirmed reproduction: a live
+        // device test found that once OnDestroy has actually completed, Android does not
+        // deliver a pending permission result to this activity at all.
+        if (IsDestroyed || IsFinishing)
+            return;
+
         if (requestCode != CAMERA_REQUEST_CODE || grantResults.Length <= 0 || grantResults[0] != Permission.Granted)
         {
             MobileBarcodeScanner.DispatchError(_instanceId, "Camera permission is not granted.");
