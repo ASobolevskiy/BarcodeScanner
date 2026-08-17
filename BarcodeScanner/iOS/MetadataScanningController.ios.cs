@@ -50,7 +50,7 @@ internal class MetadataScanningController(
     // to (accidentally, at the cost of blocking UI) before this queue existed.
     private readonly DispatchQueue _sessionQueue = new("sessionQueue");
 
-    private bool _isFinishing;
+    private volatile bool _isFinishing;
     private bool _isDismissed;
     private bool _hasAppeared;
     private bool _dismissPending;
