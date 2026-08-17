@@ -225,6 +225,21 @@ internal class MetadataScanningController(
                 _activeOverlay = defaultOverlay;
             }
 
+            // UIView.Add (addSubview:) does not throw if the view already has a superview - it
+            // silently detaches it from wherever it currently lives and reattaches it here. For a
+            // consumer that violates the CustomOverlayFactory "return a fresh, unattached view"
+            // contract, that means their own UI silently loses a child view with no diagnostic,
+            // and - since the library only ever detaches the overlay on session end (never re-adds
+            // it anywhere) - it never comes back. Reject this explicitly instead, matching the
+            // crash guard Android needs for the same misuse (that platform's AddView throws).
+            if (overlay.Superview is not null)
+            {
+                MobileBarcodeScanner.DispatchError(instanceId,
+                    "CustomOverlayFactory must return a fresh, unattached UIView for every scan session.");
+                DismissOnce();
+                return false;
+            }
+
             _overlayView = overlay;
             _overlayView.TranslatesAutoresizingMaskIntoConstraints = false;
             View?.Add(_overlayView);
