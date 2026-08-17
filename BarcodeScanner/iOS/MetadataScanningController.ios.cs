@@ -146,6 +146,7 @@ internal class MetadataScanningController(
             _metadataOutput?.SetDelegate(null, null);
             _metadataOutputDelegate = null;
             _previewLayer?.RemoveFromSuperLayer();
+            _overlayView?.RemoveFromSuperview();
         }
         finally
         {
