@@ -64,6 +64,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     private Func<bool>? _shouldProcessFrameDelegate;
     private Action<FrameGeometry>? _onImageInfoDelegate;
 
+    // Reused across OnBarcodesFoundInternal/GetMappedPoints calls instead of allocating fresh each
+    // time (AND-03). Safe: OnBarcodesFoundInternal always runs via RunOnUiThread (single UI thread,
+    // Looper messages processed strictly sequentially), and each buffer is fully consumed before
+    // the method that filled it returns — no cross-call or cross-thread retention.
+    private readonly List<BarcodeData> _barcodeDataBuffer = [];
+    private readonly float[] _srcPointsBuffer = new float[8];
+    private readonly Matrix _correctionMatrix = new();
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
@@ -534,29 +542,29 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         if (!_isScanning || _isFinishing || _detectionHandler is null || _cameraPreview is null)
             return;
         
-        var barcodeDataList = new List<BarcodeData>();
+        _barcodeDataBuffer.Clear();
         foreach (var barcode in barcodes)
         {
-            if (string.IsNullOrWhiteSpace(barcode.RawValue)) 
-                continue; 
-            
+            if (string.IsNullOrWhiteSpace(barcode.RawValue))
+                continue;
+
             var screenPoints = GetMappedPoints(barcode);
 
-            if (screenPoints is null) 
+            if (screenPoints is null)
                 continue;
-            
+
             var symbology = barcode.Format.ToLocalFormat();
-            barcodeDataList.Add(new BarcodeData(
-                                                barcode.RawValue,
-                                                barcode.DisplayValue,
-                                                symbology,
-                                                screenPoints));
+            _barcodeDataBuffer.Add(new BarcodeData(
+                                                   barcode.RawValue,
+                                                   barcode.DisplayValue,
+                                                   symbology,
+                                                   screenPoints));
         }
-        
+
         var roiRectF = GetCurrentRoiRectF();
         var roi = new RoiBounds(roiRectF.Left, roiRectF.Top, roiRectF.Right, roiRectF.Bottom);
-        
-        var result = _detectionHandler.Process(barcodeDataList, roi);
+
+        var result = _detectionHandler.Process(_barcodeDataBuffer, roi);
         if (result is null) return;
 
         HandleResult(result.Value);
@@ -633,11 +641,10 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         var points = barcode.GetCornerPoints();
         if (points is null or {Length: < 4}) return null; 
          
-        var srcPoints = new float[8];
         for (var i = 0; i < 4; i++)
         {
-            srcPoints[i * 2] = points[i].X;
-            srcPoints[i * 2 + 1] = points[i].Y;
+            _srcPointsBuffer[i * 2] = points[i].X;
+            _srcPointsBuffer[i * 2 + 1] = points[i].Y;
         }
 
         var geometry = Volatile.Read(ref _latestFrameGeometry);
@@ -645,12 +652,12 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             return null;
 
         var matrix = MatrixHelper.GetCorrectionMatrix(geometry.Width, geometry.Height, geometry.RotationDegrees,
-                                                      _cameraPreview);
+                                                      _cameraPreview, _correctionMatrix);
         if (matrix == null)
             return null;
 
         var mappedPoints = new float[8];
-        matrix.MapPoints(mappedPoints, srcPoints);
+        matrix.MapPoints(mappedPoints, _srcPointsBuffer);
         return mappedPoints;
     }
     

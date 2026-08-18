@@ -12,6 +12,7 @@ internal static class MatrixHelper
         int imageHeight,
         int rotationDegrees,
         PreviewView? previewView,
+        Matrix matrix,
         LensFacing lensFacing = LensFacing.Back,
         bool applyRotation = false)
     {
@@ -37,7 +38,6 @@ internal static class MatrixHelper
 
         var (offsetX, offsetY) = GetAxisOffsets(scaleType, viewWidth, viewHeight, rotatedWidth, rotatedHeight, scale);
 
-        var matrix = new Matrix();
         matrix.Reset();
 
         if (applyRotation)
