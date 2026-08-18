@@ -38,6 +38,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     private IListenableFuture? _cameraProviderFuture;
     private ProcessCameraProvider? _cameraProvider;
     private ICameraControl? _cameraControl;
+    private ICamera? _camera;
     private View? _overlayView;
     private ConstraintLayout? _root;
     
@@ -237,6 +238,12 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             {
                 _cameraControl?.Dispose();
                 _cameraControl = null;
+            });
+
+            SafeCleanup("Dispose camera", () =>
+            {
+                _camera?.Dispose();
+                _camera = null;
             });
             
             SafeCleanup("Dispose camera provider", () =>
@@ -481,8 +488,8 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         _imageAnalysis = CreateImageAnalysisUseCase();
         
         cameraProvider.UnbindAll();
-        var camera = cameraProvider.BindToLifecycle(this, cameraSelector, _previewUseCase, _imageAnalysis);
-        _cameraControl = camera.CameraControl;
+        _camera = cameraProvider.BindToLifecycle(this, cameraSelector, _previewUseCase, _imageAnalysis);
+        _cameraControl = _camera.CameraControl;
     }
         
     private Preview CreatePreviewUseCase()  
