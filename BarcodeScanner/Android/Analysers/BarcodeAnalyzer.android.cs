@@ -153,6 +153,8 @@ internal sealed class BarcodeAnalyzer(
         {
             if (_isDisposed)
                 return;
+
+            Log.Warn("BarcodeAnalyzer", $"Barcode detection failed: {e.Message}");
         }
         
         internal void MarkAsDead()
