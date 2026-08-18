@@ -39,6 +39,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
     private ProcessCameraProvider? _cameraProvider;
     private ICameraControl? _cameraControl;
     private ICamera? _camera;
+
+    // A SetTorch() call that arrives before BindCameraUseCases assigns _cameraControl is
+    // remembered here instead of being silently dropped. Safe as a plain field: SetTorch's check
+    // runs inside RunOnUiThread, and BindCameraUseCases always runs on the main thread too
+    // (dispatched via ContextCompat.GetMainExecutor from the camera provider future's listener) -
+    // both sides are confined to the same serial UI-thread Looper queue, same reasoning already
+    // used for the reused buffers above (AND-03).
+    private bool? _pendingTorchState;
     private View? _overlayView;
     private ConstraintLayout? _root;
     
@@ -490,6 +498,12 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         cameraProvider.UnbindAll();
         _camera = cameraProvider.BindToLifecycle(this, cameraSelector, _previewUseCase, _imageAnalysis);
         _cameraControl = _camera.CameraControl;
+
+        if (_pendingTorchState is { } pendingTorch)
+        {
+            _pendingTorchState = null;
+            _cameraControl.EnableTorch(pendingTorch);
+        }
     }
         
     private Preview CreatePreviewUseCase()  
@@ -711,7 +725,15 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     public void SetTorch(bool turnOn)
     {
-        RunOnUiThread(() => _cameraControl?.EnableTorch(turnOn));
+        RunOnUiThread(() =>
+        {
+            if (_cameraControl is null)
+            {
+                _pendingTorchState = turnOn;
+                return;
+            }
+            _cameraControl.EnableTorch(turnOn);
+        });
     }
 
     private void CancelScan()
