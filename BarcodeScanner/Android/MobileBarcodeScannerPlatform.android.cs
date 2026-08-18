@@ -50,9 +50,12 @@ public static class MobileBarcodeScannerPlatform
         lock (LockObject)
         {
             if(isInitialized) return;
-            
-            activity.Application?.RegisterActivityLifecycleCallbacks(new ActivityLifecycleTracker());
-            isInitialized = true;
+
+            if (activity.Application is { } app)
+            {
+                app.RegisterActivityLifecycleCallbacks(new ActivityLifecycleTracker());
+                isInitialized = true;
+            }
         }
     }
 
