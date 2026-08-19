@@ -93,8 +93,9 @@ internal class MetadataScanningController(
         ApplyOptions(_options);
         if (!SetupOverlay(view, _options))
             return;
-        SetupCamera(view, _options);
-        
+        if (!SetupCamera(view, _options))
+            return;
+
         _sessionQueue.DispatchAsync(() => _session?.StartRunning());
     }
 
@@ -275,63 +276,85 @@ internal class MetadataScanningController(
         }
     }
 
-    private void SetupCamera(UIView parentView, BarcodeScanningOptions options)
+    private bool SetupCamera(UIView parentView, BarcodeScanningOptions options)
     {
-        _session = new AVCaptureSession { SessionPreset = AVCaptureSession.PresetHigh };
-        _cameraDevice = AVCaptureDevice.GetDefaultDevice(AVMediaTypes.Video);
-        if (_cameraDevice is null)
+        // Guards the whole body for the same reason as SetupOverlay: called from ViewDidLoad,
+        // which has no enclosing try/catch above it, and this method reaches into
+        // AVFoundation/native APIs plus caller-supplied options (PossibleFormats) that can throw
+        // (API-11 in CONTEXT.md) - confirmed on the simulator that an unhandled exception here is
+        // silently swallowed the same way as SetupOverlay's, not a crash: the scanner screen
+        // dismisses with no diagnostic and the caller's Task hangs forever.
+        try
         {
-            MobileBarcodeScanner.DispatchError(instanceId, "No camera device found");
-            DismissOnce();
-            return;
+            _session = new AVCaptureSession { SessionPreset = AVCaptureSession.PresetHigh };
+            _cameraDevice = AVCaptureDevice.GetDefaultDevice(AVMediaTypes.Video);
+            if (_cameraDevice is null)
+            {
+                MobileBarcodeScanner.DispatchError(instanceId, "No camera device found");
+                DismissOnce();
+                return false;
+            }
+
+            var pendingTorch = Interlocked.Exchange(ref _pendingTorchState, NoPendingTorchRequest);
+            if (pendingTorch != NoPendingTorchRequest)
+                SetTorchInternal(pendingTorch == PendingTorchOn);
+
+            var input = new AVCaptureDeviceInput(_cameraDevice, out var error);
+            if (error is not null || !_session.CanAddInput(input))
+            {
+                var errorMessage = error?.LocalizedDescription ?? "Unknown error";
+                MobileBarcodeScanner.DispatchError(instanceId, errorMessage);
+                DismissOnce();
+                return false;
+            }
+            _session.AddInput(input);
+
+            _metadataOutput = new AVCaptureMetadataOutput();
+            if (!_session.CanAddOutput(_metadataOutput))
+            {
+                MobileBarcodeScanner.DispatchError(instanceId, "Cannot add metadata output");
+                DismissOnce();
+                return false;
+            }
+            _session.AddOutput(_metadataOutput);
+            if (_metadataOutput.Connections is { Length: > 0 } && _metadataOutput.Connections[0] is { SupportsVideoOrientation: true} connection)
+                connection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
+
+            _metadataOutput.MetadataObjectTypes = ResolveMetadataObjectTypes(options.PossibleFormats, _metadataOutput);
+
+            _metadataQueue = new DispatchQueue("metadataQueue");
+
+            _metadataOutputDelegate = new MetadataOutputDelegate(HandleDetectedCodes);
+            _metadataOutput.SetDelegate(_metadataOutputDelegate, _metadataQueue);
+
+            _previewLayer = new AVCaptureVideoPreviewLayer(_session)
+            {
+                VideoGravity = AVLayerVideoGravity.ResizeAspectFill,
+                Frame = parentView.Bounds
+            };
+
+            if(_previewLayer.Connection is {SupportsVideoOrientation: true} previewConnection)
+                previewConnection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
+
+            parentView.Layer.InsertSublayer(_previewLayer, 0);
+
+            UpdateRectOfInterest();
+
+            //_session.StartRunning();
+            return true;
         }
-
-        var pendingTorch = Interlocked.Exchange(ref _pendingTorchState, NoPendingTorchRequest);
-        if (pendingTorch != NoPendingTorchRequest)
-            SetTorchInternal(pendingTorch == PendingTorchOn);
-
-        var input = new AVCaptureDeviceInput(_cameraDevice, out var error);
-        if (error is not null || !_session.CanAddInput(input))
+        catch (Exception ex)
         {
-            var errorMessage = error?.LocalizedDescription ?? "Unknown error";
-            MobileBarcodeScanner.DispatchError(instanceId, errorMessage);
+            // Deliberately no extra cleanup here: a partially-built _session/_metadataOutput/
+            // _previewLayer is safe to leave assigned - ViewDidDisappear/dispose already null-
+            // check every one of them, and returning false here stops ViewDidLoad from ever
+            // scheduling _session?.StartRunning() on it.
+            Debug.WriteLine($"[BarcodeScanner] SetupCamera failed: {ex.Message}");
+            Debug.WriteLine($"[BarcodeScanner] StackTrace: {ex.StackTrace}");
+            MobileBarcodeScanner.DispatchError(instanceId, $"Failed to set up camera: {ex.Message}");
             DismissOnce();
-            return;
+            return false;
         }
-        _session.AddInput(input);
-
-        _metadataOutput = new AVCaptureMetadataOutput();
-        if (!_session.CanAddOutput(_metadataOutput))
-        {
-            MobileBarcodeScanner.DispatchError(instanceId, "Cannot add metadata output");
-            DismissOnce();
-            return;
-        }
-        _session.AddOutput(_metadataOutput);
-        if (_metadataOutput.Connections is { Length: > 0 } && _metadataOutput.Connections[0] is { SupportsVideoOrientation: true} connection)
-            connection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
-
-        _metadataOutput.MetadataObjectTypes = ResolveMetadataObjectTypes(options.PossibleFormats, _metadataOutput);
-        
-        _metadataQueue = new DispatchQueue("metadataQueue");
-
-        _metadataOutputDelegate = new MetadataOutputDelegate(HandleDetectedCodes);
-        _metadataOutput.SetDelegate(_metadataOutputDelegate, _metadataQueue);
-        
-        _previewLayer = new AVCaptureVideoPreviewLayer(_session)
-        {
-            VideoGravity = AVLayerVideoGravity.ResizeAspectFill,
-            Frame = parentView.Bounds
-        };
-
-        if(_previewLayer.Connection is {SupportsVideoOrientation: true} previewConnection)
-            previewConnection.VideoOrientation = AVCaptureVideoOrientation.Portrait;
-
-        parentView.Layer.InsertSublayer(_previewLayer, 0);
-        
-        UpdateRectOfInterest();
-        
-        //_session.StartRunning();
     }
 
     /// <summary>
