@@ -6,7 +6,9 @@ namespace BarcodeScanner;
 /// Implement this on a custom overlay view (returned from
 /// <see cref="BarcodeScanningOptions.CustomOverlayFactory"/>) to receive live updates from
 /// the scan engine — detected barcode positions, region-of-interest sync, and reset
-/// notifications. The library's built-in overlays implement this interface internally.
+/// notifications. The library's built-in overlays implement this interface internally. Every
+/// method on this interface is called on the UI thread — safe to update UI directly from any
+/// of them.
 /// </summary>
 /// <remarks>
 /// ⚠️ WARNING: see <see cref="BarcodeScanningOptions.CustomOverlayFactory"/> for the ownership
