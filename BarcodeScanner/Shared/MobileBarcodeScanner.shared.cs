@@ -152,11 +152,12 @@ public sealed partial class MobileBarcodeScanner : IMobileBarcodeScanner
 
         if (Interlocked.CompareExchange(ref _isScanningState, 1, 0) != 0)
         {
-            onResult(new BarcodeResult
+            var errorResult = new BarcodeResult
             {
                 Status = ScanStatus.Error,
                 ErrorMessage = "Scanning is already in progress. Wait for completion or create new instance of scanner."
-            });
+            };
+            PlatformPostToMain(() => onResult(errorResult));
             return Task.CompletedTask;
         }
 
