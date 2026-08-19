@@ -190,14 +190,14 @@ internal class MetadataScanningController(
             if (options.CustomOverlayFactory != null)
             {
                 var overlayInstance = options.CustomOverlayFactory(this);
-                if(overlayInstance is not UIView view)
+                if (overlayInstance is null)
                 {
-                    MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must return UIKit.UIView");
+                    MobileBarcodeScanner.DispatchError(instanceId, "CustomOverlayFactory must not return null");
                     DismissOnce();
                     return false;
                 }
 
-                overlay = view;
+                overlay = overlayInstance;
                 if(overlayInstance is IActiveScannerOverlay activeOverlay)
                     _activeOverlay = activeOverlay;
             }

@@ -322,14 +322,14 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
             if (options.CustomOverlayFactory != null)
             {
                 var overlayInstance = options.CustomOverlayFactory(this);
-                if (overlayInstance is not View view)
+                if (overlayInstance is null)
                 {
-                    MobileBarcodeScanner.DispatchError(_instanceId, "CustomOverlayFactory must return Android.Views.View");
+                    MobileBarcodeScanner.DispatchError(_instanceId, "CustomOverlayFactory must not return null");
                     Finish();
                     return false;
                 }
 
-                overlayView = view;
+                overlayView = overlayInstance;
 
                 if (overlayInstance is IActiveScannerOverlay activeOverlay)
                 {

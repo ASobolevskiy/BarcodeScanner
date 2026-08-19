@@ -8,7 +8,7 @@ namespace BarcodeScanner.Models;
 /// Configuration for a single scan session, passed to <see cref="IMobileBarcodeScanner.ScanAsync"/>
 /// or <see cref="IMobileBarcodeScanner.ScanContinuouslyAsync"/>. If omitted, default values are used.
 /// </summary>
-public sealed class BarcodeScanningOptions
+public sealed partial class BarcodeScanningOptions
 {
     /// <summary>
     /// List of symbologies you want to detect. By default, all possible symbologies included.
@@ -35,32 +35,6 @@ public sealed class BarcodeScanningOptions
     /// </summary>
     public int DelayBeforeAnalyzingFramesMs { get; set; } = 300;
     
-    /// <summary>
-    /// Factory for creating a custom scanner overlay. Called once per scan session, on the UI
-    /// thread, during scanner setup. Must return a new <c>Android.Views.View</c> or
-    /// <c>UIKit.UIView</c> instance — the platform context (<c>Activity</c> on Android,
-    /// <c>UIViewController</c> on iOS) is passed as the argument so you don't need to capture
-    /// it from elsewhere. Implement <see cref="IActiveScannerOverlay"/> on the returned view if
-    /// you want it to receive live updates from the scan engine (detected barcode positions,
-    /// region-of-interest sync, reset notifications) — otherwise it's shown but never updated.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ WARNING: return a fresh instance on every call — never a cached/reused one.
-    /// <list type="bullet">
-    /// <item>The library removes the returned view from its parent when the scan session ends,
-    /// but does not dispose it — ownership and lifetime are yours.</item>
-    /// <item><b>Android:</b> the view holds the passed <c>Activity</c> as its <c>Context</c>
-    /// for as long as the view itself is alive — this is normal and unavoidable (every Android
-    /// <c>View</c> does this), but it means caching the view for reuse keeps that specific
-    /// <c>Activity</c> instance alive for as long as the cache does.</item>
-    /// <item><b>iOS:</b> do not store the passed <c>UIViewController</c> anywhere that outlives
-    /// this call (a field, a closure) — a saved reference is never garbage-collected, because
-    /// the .NET-for-iOS runtime cannot collect a reference cycle that crosses a
-    /// natively-retained object. This is not a slow leak — it never resolves.</item>
-    /// </list>
-    /// </remarks>
-    public Func<object, object>? CustomOverlayFactory { get; set; }
-
     /// <summary>
     /// Delay before scanner closure after successful scan.
     /// </summary>

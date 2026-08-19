@@ -1,5 +1,4 @@
 using _Microsoft.Android.Resource.Designer;
-using Android.Content;
 using AndroidX.AppCompat.App;
 using BarcodeScanner;
 using BarcodeScanner.Enums;
@@ -80,18 +79,15 @@ public class MainActivity : AppCompatActivity
             var options = new BarcodeScanningOptions
             {
                 PossibleFormats = [BarcodeSymbology.DataMatrix, BarcodeSymbology.Code128, BarcodeSymbology.QrCode],
-                CustomOverlayFactory = libContext =>
+                CustomOverlayFactory = activity =>
                 {
-                    if (libContext is not Context context)
-                        throw new InvalidOperationException("Invalid context");
-                    var inflater = Android.Views.LayoutInflater.From(context);
+                    var inflater = Android.Views.LayoutInflater.From(activity)!;
+                    var overlayView = inflater.Inflate(ResourceConstant.Layout.custom_static_overlay, null)!;
 
-                    var overlayView = inflater?.Inflate(ResourceConstant.Layout.custom_static_overlay, null);
-
-                    var torch = overlayView?.FindViewById(ResourceConstant.Id.flash);
+                    var torch = overlayView.FindViewById(ResourceConstant.Id.flash);
                     torch?.Click += (sender, args) => scanner.ToggleTorch();
 
-                    var back = overlayView?.FindViewById(ResourceConstant.Id.back);
+                    var back = overlayView.FindViewById(ResourceConstant.Id.back);
                     back?.Click += (sender, args) => scanner.CancelScan();
 
                     return overlayView;
