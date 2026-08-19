@@ -9,7 +9,10 @@ namespace BarcodeScanner.Models;
 public enum BarcodeSymbology
 {
     /// <summary>
-    /// Do not set this explicitly. If this value will be in possible formats 
+    /// Do not set this explicitly — it has no native meaning and cannot be scanned for. If
+    /// <c>PossibleFormats</c> contains it alongside other symbologies, it is silently removed
+    /// (logged as a warning); if it is the only value present, <c>ScanAsync</c>/
+    /// <c>ScanContinuouslyAsync</c> returns <c>ScanStatus.Error</c> instead of starting a scan.
     /// </summary>
     Unknown,
     Aztec,

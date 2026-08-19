@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using BarcodeScanner;
 
 namespace BarcodeScanner.Models;
@@ -100,6 +102,35 @@ public sealed partial class BarcodeScanningOptions
     /// </summary>
     internal int GetEffectiveOverlayResetDelay() =>
         Math.Max(0, Math.Min(DelayBeforeOverlayResetMs, DelayBetweenContinuousScansMs));
+
+    /// <summary>
+    /// Removes <see cref="BarcodeSymbology.Unknown"/> from <see cref="PossibleFormats"/> if present
+    /// (logging a warning), since it has no native meaning and must never be requested directly.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// <see cref="PossibleFormats"/> contained only <see cref="BarcodeSymbology.Unknown"/>, leaving
+    /// nothing to detect.
+    /// </exception>
+    internal void SanitizePossibleFormats()
+    {
+        if (PossibleFormats is null)
+            return;
+
+        var formats = PossibleFormats as ICollection<BarcodeSymbology> ?? PossibleFormats.ToArray();
+        if (!formats.Contains(BarcodeSymbology.Unknown))
+            return;
+
+        var withoutUnknown = formats.Where(f => f != BarcodeSymbology.Unknown).ToArray();
+        if (withoutUnknown.Length == 0)
+            throw new InvalidOperationException(
+                "PossibleFormats must not contain only BarcodeSymbology.Unknown — it has no native " +
+                "meaning and cannot be scanned for. Omit PossibleFormats entirely, or use " +
+                "BarcodeSymbology.AllSymbologies, to detect every supported format.");
+
+        Debug.WriteLine("[BarcodeScanner] Warning: PossibleFormats contained BarcodeSymbology.Unknown " +
+                         $"— removed; {withoutUnknown.Length} format(s) remain.");
+        PossibleFormats = withoutUnknown;
+    }
 }
 
 internal enum ScanType

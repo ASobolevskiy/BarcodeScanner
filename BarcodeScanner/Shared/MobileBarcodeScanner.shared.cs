@@ -71,6 +71,7 @@ public sealed partial class MobileBarcodeScanner : IMobileBarcodeScanner
         {
             var finalOptions = (options ?? _defaultOptions).Clone();
             finalOptions.ScannerMode = ScanType.OneShot;
+            finalOptions.SanitizePossibleFormats();
 
             if (finalOptions is { UseAutoClose: true, AutoCloseDelaySeconds: > 0 })
             {
@@ -141,6 +142,7 @@ public sealed partial class MobileBarcodeScanner : IMobileBarcodeScanner
         {
             var finalOptions = (options ?? _defaultOptions).Clone();
             finalOptions.ScannerMode = ScanType.Continuous;
+            finalOptions.SanitizePossibleFormats();
 
             if (finalOptions.UseAutoClose)
                 Debug.WriteLine("[BarcodeScanner] Warning: UseAutoClose has no effect in continuous scan mode.");
