@@ -9,7 +9,7 @@ using BarcodeScanner.Models;
 namespace BarcodeScanner;
 
 /// <inheritdoc/>
-public partial class MobileBarcodeScanner : IMobileBarcodeScanner
+public sealed partial class MobileBarcodeScanner : IMobileBarcodeScanner
 {
     // Keyed by scan session, not by scanner instance - see _sessionId below for why that
     // distinction matters (CONC-01, fixed 2026-08-12).
