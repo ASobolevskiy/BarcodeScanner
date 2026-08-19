@@ -65,6 +65,8 @@ public sealed record BarcodeResult
 
     public override string ToString()
     {
-        return $"Format: {Symbology.ToString()}, RawValue: {RawValue}, DisplayValue: {DisplayValue}";
+        return Status is ScanStatus.Success
+            ? $"Status: {Status}, Format: {Symbology}, RawValue: {RawValue}, DisplayValue: {DisplayValue}"
+            : $"Status: {Status}, ErrorMessage: {ErrorMessage}";
     }
 }
