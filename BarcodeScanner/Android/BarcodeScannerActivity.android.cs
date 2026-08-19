@@ -304,7 +304,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _delayBeforeClose = options.DelayBeforeScannerClose;
+        _delayBeforeClose = options.DelayBeforeScannerCloseMs;
     }
     
     private bool SetupOverlay(BarcodeScanningOptions options)

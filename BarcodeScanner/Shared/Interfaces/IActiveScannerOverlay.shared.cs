@@ -17,7 +17,7 @@ public interface IActiveScannerOverlay
 {
     /// <summary>
     /// Called to reset the overlay to its idle (no detection) visual state — after the
-    /// <see cref="BarcodeScanningOptions.DelayBeforeOverlayReset"/> following a detection in
+    /// <see cref="BarcodeScanningOptions.DelayBeforeOverlayResetMs"/> following a detection in
     /// continuous mode, or whenever a frame has nothing to highlight.
     /// </summary>
     void ClearOverlay();

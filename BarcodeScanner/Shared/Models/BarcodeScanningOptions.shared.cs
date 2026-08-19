@@ -17,23 +17,23 @@ public sealed class BarcodeScanningOptions
     public IEnumerable<BarcodeSymbology> PossibleFormats { get; set; } = [BarcodeSymbology.AllSymbologies];
 
     /// <summary>
-    /// Delay in milliseconds. 1 second by default.
+    /// 1 second by default.
     /// If you are in continuous scanning mode use this to set delay between consecutive
-    /// scans. 
+    /// scans.
     /// </summary>
-    public int DelayBetweenContinuousScans { get; set; } = 1000;
+    public int DelayBetweenContinuousScansMs { get; set; } = 1000;
 
     /// <summary>
-    /// Delay in milliseconds. 150ms by default.
+    /// 150ms by default.
     /// Use this to tune delay between frame analysis
     /// </summary>
-    public int DelayBetweenAnalyzingFrames { get; set; } = 150;
+    public int DelayBetweenAnalyzingFramesMs { get; set; } = 150;
 
     /// <summary>
-    /// Delay in milliseconds. 300ms by default.
+    /// 300ms by default.
     /// Use this to tune the delay before first frame will be analyzed.
     /// </summary>
-    public int DelayBeforeAnalyzingFrames { get; set; } = 300;
+    public int DelayBeforeAnalyzingFramesMs { get; set; } = 300;
     
     /// <summary>
     /// Factory for creating a custom scanner overlay. Called once per scan session, on the UI
@@ -62,14 +62,14 @@ public sealed class BarcodeScanningOptions
     public Func<object, object>? CustomOverlayFactory { get; set; }
 
     /// <summary>
-    /// Delay before scanner closure after successful scan (in milliseconds)
+    /// Delay before scanner closure after successful scan.
     /// </summary>
     /// <remarks>
     /// ⚠️ WARNING: Minimal acceptable value is <b>300 ms</b>.
     /// If you try to set value below 300ms it will be automatically set
     /// to 300ms to ensure there will be no problems with animations.
     /// </remarks>
-    public int DelayBeforeScannerClose
+    public int DelayBeforeScannerCloseMs
     {
         get;
         set => field = Math.Max(300, value);
@@ -99,18 +99,18 @@ public sealed class BarcodeScanningOptions
 
     /// <summary>
     /// Delay before the overlay visually returns to its default (idle) state after a successful
-    /// detection in continuous scan mode (in milliseconds). Not used in single-shot mode — use
-    /// <see cref="DelayBeforeScannerClose"/> for that.
+    /// detection in continuous scan mode. Not used in single-shot mode — use
+    /// <see cref="DelayBeforeScannerCloseMs"/> for that.
     /// </summary>
     /// <remarks>
     /// ⚠️ WARNING: The effective value used at scan time will never exceed
-    /// <see cref="DelayBetweenContinuousScans"/> — if you set this higher, it will be silently
-    /// clamped down to <see cref="DelayBetweenContinuousScans"/> when the scan starts, so the
+    /// <see cref="DelayBetweenContinuousScansMs"/> — if you set this higher, it will be silently
+    /// clamped down to <see cref="DelayBetweenContinuousScansMs"/> when the scan starts, so the
     /// overlay always has time to finish resetting before the next detection is allowed.
-    /// Setting this property itself is not clamped immediately (unlike <see cref="DelayBeforeScannerClose"/>) —
+    /// Setting this property itself is not clamped immediately (unlike <see cref="DelayBeforeScannerCloseMs"/>) —
     /// the clamp is applied when scanning starts, not when this value is assigned.
     /// </remarks>
-    public int DelayBeforeOverlayReset { get; set; } = 500;
+    public int DelayBeforeOverlayResetMs { get; set; } = 500;
 
     internal ScanType ScannerMode { get; set; }
 
@@ -120,12 +120,12 @@ public sealed class BarcodeScanningOptions
     internal BarcodeScanningOptions Clone() => (BarcodeScanningOptions)MemberwiseClone();
 
     /// <summary>
-    /// Single source of truth for the DelayBeforeOverlayReset/DelayBetweenContinuousScans invariant.
+    /// Single source of truth for the DelayBeforeOverlayResetMs/DelayBetweenContinuousScansMs invariant.
     /// Computed at point of use (not in a property setter) since a cross-field clamp in an object
     /// initializer setter would depend on property assignment order.
     /// </summary>
     internal int GetEffectiveOverlayResetDelay() =>
-        Math.Max(0, Math.Min(DelayBeforeOverlayReset, DelayBetweenContinuousScans));
+        Math.Max(0, Math.Min(DelayBeforeOverlayResetMs, DelayBetweenContinuousScansMs));
 }
 
 internal enum ScanType

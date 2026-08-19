@@ -21,9 +21,9 @@ internal sealed class BarcodeDetectionHandler(
     private const float SMOOTH_FACTOR_CENTER = 0.15f;
     private const float SMOOTH_FACTOR_SIZE = 0.3f;
 
-    private readonly FrameThrottler _throttler = new(options.DelayBeforeAnalyzingFrames,
-                                                     options.DelayBetweenAnalyzingFrames);
-    private readonly int _delayBetweenScans = options.DelayBetweenContinuousScans;
+    private readonly FrameThrottler _throttler = new(options.DelayBeforeAnalyzingFramesMs,
+                                                     options.DelayBetweenAnalyzingFramesMs);
+    private readonly int _delayBetweenScans = options.DelayBetweenContinuousScansMs;
     private readonly ScanType _scanType = options.ScannerMode;
 
     private readonly List<(BarcodeData Data, float Distance)> _candidatesBuffer = [];

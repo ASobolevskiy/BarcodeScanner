@@ -172,7 +172,7 @@ internal class MetadataScanningController(
 
     private void ApplyOptions(BarcodeScanningOptions options)
     {
-        _delayBeforeClose = options.DelayBeforeScannerClose;
+        _delayBeforeClose = options.DelayBeforeScannerCloseMs;
     }
 
     private bool SetupOverlay(UIView parentView, BarcodeScanningOptions options)
