@@ -40,7 +40,7 @@ public interface IActiveScannerOverlay
     /// <remarks>
     /// Library uses this value if the <see cref="BarcodeScanningOptions.RegionOfInterest"/> is not set.
     /// </remarks>
-    ViewFinderRect GetViewfinderRect();
+    ViewFinderRect GetViewFinderRect();
 
     /// <summary>
     /// Called once when scanning starts if <see cref="BarcodeScanningOptions.RegionOfInterest"/>

@@ -143,7 +143,7 @@ internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOve
         _drawingView.UpdateOverlay(barcodeValue, targetPoints);
     }
 
-    public ViewFinderRect GetViewfinderRect() => _drawingView.GetViewfinderRect();
+    public ViewFinderRect GetViewFinderRect() => _drawingView.GetViewFinderRect();
 
     public void SyncRegionOfInterest(RoiRect roi) => _drawingView.SyncRegionOfInterest(roi);
 

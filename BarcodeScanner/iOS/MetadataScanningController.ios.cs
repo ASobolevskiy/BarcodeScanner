@@ -471,7 +471,7 @@ internal class MetadataScanningController(
         }
 
         return _activeOverlay is not null
-            ? _activeOverlay.GetViewfinderRect().ToCgRect()
+            ? _activeOverlay.GetViewFinderRect().ToCgRect()
             : view.Bounds;
     }
 

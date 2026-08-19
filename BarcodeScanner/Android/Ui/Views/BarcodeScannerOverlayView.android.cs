@@ -250,7 +250,7 @@ internal class BarcodeScannerOverlayView : View, IActiveScannerOverlay, IDisposa
     #endregion
 
     #region Public API
-    public ViewFinderRect GetViewfinderRect() =>
+    public ViewFinderRect GetViewFinderRect() =>
         (_staticRect ?? new RectF(0, 0, 0, 0)).ToViewFinderRect();
 
     public void SyncRegionOfInterest(RoiRect roi)

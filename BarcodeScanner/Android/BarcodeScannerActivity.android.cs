@@ -605,7 +605,7 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         }
 
         return _activeOverlay is not null
-            ? _activeOverlay.GetViewfinderRect().ToRectF()
+            ? _activeOverlay.GetViewFinderRect().ToRectF()
             : new RectF(0, 0, _cameraPreview?.Width ?? 0, _cameraPreview?.Height ?? 0);
     }
     

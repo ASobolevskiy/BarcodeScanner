@@ -3,7 +3,7 @@ namespace BarcodeScanner.Models;
 /// <summary>
 /// The barcode detection area drawn by a scanner overlay, in pixels within that overlay's own
 /// view coordinate space — (0, 0) is the top-left corner. Returned from
-/// <see cref="IActiveScannerOverlay.GetViewfinderRect"/>; the library falls back to this value
+/// <see cref="IActiveScannerOverlay.GetViewFinderRect"/>; the library falls back to this value
 /// as the detection area whenever <see cref="BarcodeScanningOptions.RegionOfInterest"/> is not
 /// set. Unlike <see cref="RoiRect"/>, coordinates here are absolute pixels, not relative
 /// (0.0–1.0) fractions of the screen.

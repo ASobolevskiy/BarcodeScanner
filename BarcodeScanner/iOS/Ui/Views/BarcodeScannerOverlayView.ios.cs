@@ -108,7 +108,7 @@ internal sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         return new CGRect(x, y, squareSize, squareSize);
     }
     
-    public ViewFinderRect GetViewfinderRect() => _currentViewfinderRect.ToViewFinderRect();
+    public ViewFinderRect GetViewFinderRect() => _currentViewfinderRect.ToViewFinderRect();
 
     public void SyncRegionOfInterest(RoiRect roi)
     {
