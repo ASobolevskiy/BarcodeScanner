@@ -73,6 +73,14 @@ internal class MetadataScanningController(
 
     private volatile bool _isScanning = true;
 
+    // AVCaptureVideoPreviewLayer.MapToMetadataOutputCoordinates() silently returns a degenerate
+    // CGRect.Empty when called before the session has actually started running (it needs the
+    // active video format's real dimensions, only known once the session is live) - it does not
+    // throw, so nothing signals the failure. Written from _sessionQueue right after
+    // StartRunning() returns, read from the main thread inside UpdateRectOfInterest(), hence
+    // volatile rather than a plain bool.
+    private volatile bool _sessionReady;
+
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
@@ -96,7 +104,12 @@ internal class MetadataScanningController(
         if (!SetupCamera(view, _options))
             return;
 
-        _sessionQueue.DispatchAsync(() => _session?.StartRunning());
+        _sessionQueue.DispatchAsync(() =>
+        {
+            _session?.StartRunning();
+            _sessionReady = true;
+            DispatchQueue.MainQueue.DispatchAsync(UpdateRectOfInterest);
+        });
     }
 
     public override void ViewDidLayoutSubviews()
@@ -107,7 +120,7 @@ internal class MetadataScanningController(
         _previewLayer.Frame = view.Bounds;
         view.LayoutIfNeeded();
         var newRoi = GetRoiRect();
-        if (_roiRect.Equals(newRoi)) 
+        if (_roiRect.Equals(newRoi))
             return;
         _roiRect = newRoi;
         _publishedRoi = new RoiSnapshot((float)newRoi.Left, (float)newRoi.Top, (float)newRoi.Right, (float)newRoi.Bottom);
@@ -338,9 +351,6 @@ internal class MetadataScanningController(
 
             parentView.Layer.InsertSublayer(_previewLayer, 0);
 
-            UpdateRectOfInterest();
-
-            //_session.StartRunning();
             return true;
         }
         catch (Exception ex)
@@ -420,7 +430,7 @@ internal class MetadataScanningController(
         var snapshot = _publishedRoi;
         var roi = new RoiBounds(snapshot.Left, snapshot.Top, snapshot.Right, snapshot.Bottom);
         var result = _detectionHandler.Process(_barcodeBuffer, roi);
-        
+
         if (result is null) return;
         var value = result.Value;
 
@@ -477,7 +487,14 @@ internal class MetadataScanningController(
 
     private void UpdateRectOfInterest()
     {
-        if (_previewLayer is null || _metadataOutput is null)
+        // MapToMetadataOutputCoordinates() needs the session actually running to know the real
+        // dimensions of the active video format - called any earlier, it silently returns
+        // CGRect.Empty instead of throwing, which would leave RectOfInterest permanently zero
+        // and stop every barcode from ever being reported. ViewDidLoad calls this once _sessionReady
+        // is set, right after StartRunning() returns; ViewDidLayoutSubviews can also reach here
+        // earlier (e.g. the very first layout pass, before the session has started) and must be a
+        // safe no-op in that case rather than clobbering RectOfInterest with a degenerate value.
+        if (!_sessionReady || _previewLayer is null || _metadataOutput is null)
             return;
 
         _metadataOutput.RectOfInterest = _previewLayer.MapToMetadataOutputCoordinates(_roiRect);

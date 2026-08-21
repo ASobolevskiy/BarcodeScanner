@@ -89,7 +89,7 @@ internal sealed class BarcodeScannerOverlayView : UIView, IActiveScannerOverlay
         _currentViewfinderRect = _externalRoi is { IsValid: true } roi
             ? roi.ToCgRect(Bounds.Width, Bounds.Height)
             : ComputeDefaultCenteredRect();
-        
+
         UpdateCorners(_currentViewfinderRect, animate: false, isDetected: false);
     }
 
