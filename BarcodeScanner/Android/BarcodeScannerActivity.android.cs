@@ -521,10 +521,17 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
 
     private ImageAnalysis CreateImageAnalysisUseCase()
     {
+        // A ResolutionStrategy with FallbackRuleClosestHigher only ever considers sizes >= the
+        // target and has no further fallback - on a camera whose StreamConfigurationMap has
+        // nothing at or above 1280x720 (seen on a Honeywell EDA51, Android 8.1 - industrial
+        // scanner hardware often reports a far more restrictive set of sizes than a consumer
+        // phone) CameraX ends up with zero candidates and throws "No available output size is
+        // found" instead of binding. A ResolutionFilter reorders CameraX's own list of sizes the
+        // device actually supports (guaranteed non-empty) rather than searching a separate space
+        // that can come up empty, so it can prefer 1280x720 exactly like before while still
+        // always leaving something to fall back to.
         var resolutionSelector = new ResolutionSelector.Builder()
-                                 .SetResolutionStrategy(new ResolutionStrategy(
-                                                                               new Size(1280, 720),
-                                                                               ResolutionStrategy.FallbackRuleClosestHigher))?
+                                 .SetResolutionFilter(new PreferredResolutionFilter(new Size(1280, 720)))?
                                  .Build();
         
         var imageAnalysis = new ImageAnalysis.Builder()
@@ -750,11 +757,37 @@ public class BarcodeScannerActivity : FragmentActivity, IScannerPlatform
         {
             if (!activityRef.TryGetTarget(out var activity))
                 return;
-                
+
             if (activity.IsDestroyed || activity.IsFinishing)
                 return;
-                
+
             activity.SetupCameraProvider();
+        }
+    }
+
+    // Reorders CameraX's guaranteed-non-empty list of sizes this camera actually supports for
+    // the format, instead of expressing a target as a separate search that can come up empty
+    // (see CreateImageAnalysisUseCase). Sizes at or above the target are preferred, closest
+    // first; sizes below it come after, largest first - the same "closest higher, then lower"
+    // intent a target resolution normally expresses, just applied to a list that can't be empty.
+    private sealed class PreferredResolutionFilter(Size targetSize) : Java.Lang.Object, IResolutionFilter
+    {
+        public IList<Size>? Filter(IList<Size>? supportedSizes, int rotationDegrees)
+        {
+            if (supportedSizes is null)
+                return supportedSizes;
+
+            var targetArea = (long)targetSize.Width * targetSize.Height;
+
+            var closestHigherOrEqual = supportedSizes
+                                       .Where(size => (long)size.Width * size.Height >= targetArea)
+                                       .OrderBy(size => (long)size.Width * size.Height);
+
+            var closestLower = supportedSizes
+                               .Where(size => (long)size.Width * size.Height < targetArea)
+                               .OrderByDescending(size => (long)size.Width * size.Height);
+
+            return closestHigherOrEqual.Concat(closestLower).ToList();
         }
     }
 }
