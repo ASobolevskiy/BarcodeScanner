@@ -5,19 +5,22 @@ using Android.Graphics.Drawables;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
+using AndroidX.Core.View;
 using BarcodeScanner.Models;
 
 namespace BarcodeScanner.Ui.Views;
 
-internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverlay
+internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOverlay, IOnApplyWindowInsetsListener
 {
     private const int BUTTON_SIZE = 56;
-    private const int BUTTON_MARGIN = 60;
-    
+    private const int BUTTON_MARGIN_HORIZONTAL = 60;
+    private const int BUTTON_MARGIN_VERTICAL = 60;
+
     private BarcodeScannerOverlayView _drawingView;
     private Button? _btnBack;
     private Button? _btnTorch;
     private int _buttonSizePx;
+    private int _buttonMarginVerticalPx;
 
     private bool _isTorchOn;
 
@@ -53,31 +56,64 @@ internal class BarcodeScannerOverlayWithButtons : FrameLayout, IActiveScannerOve
     {
         var density = Context?.Resources?.DisplayMetrics?.Density ?? 1f;
         _buttonSizePx = (int)(BUTTON_SIZE * density);
-        
+        // Only the vertical margin needs to scale with density and absorb the nav bar inset
+        // below (see OnApplyWindowInsets) - that's what the buttons being hidden behind the
+        // system navigation bar actually depends on. The horizontal margin is left as it was
+        // (unscaled) so side placement doesn't shift along with that fix.
+        _buttonMarginVerticalPx = (int)(BUTTON_MARGIN_VERTICAL * density);
+
         _drawingView = new BarcodeScannerOverlayView(Context);
         AddView(_drawingView, new LayoutParams(
-                                               ViewGroup.LayoutParams.MatchParent, 
+                                               ViewGroup.LayoutParams.MatchParent,
                                                ViewGroup.LayoutParams.MatchParent));
-        
+
         _btnBack = CreateCircleButton("❌");
         var backParams = new LayoutParams(_buttonSizePx, _buttonSizePx)
         {
             Gravity = GravityFlags.Bottom | GravityFlags.Start,
-            BottomMargin = BUTTON_MARGIN,
-            MarginStart = BUTTON_MARGIN
+            BottomMargin = _buttonMarginVerticalPx,
+            MarginStart = BUTTON_MARGIN_HORIZONTAL
         };
         _btnBack.Click += OnBtnBackClick;
         AddView(_btnBack, backParams);
-        
+
         _btnTorch = CreateCircleButton("🔦");
         var torchParams = new LayoutParams(_buttonSizePx, _buttonSizePx)
         {
             Gravity = GravityFlags.Bottom | GravityFlags.End,
-            BottomMargin = BUTTON_MARGIN,
-            MarginEnd = BUTTON_MARGIN
+            BottomMargin = _buttonMarginVerticalPx,
+            MarginEnd = BUTTON_MARGIN_HORIZONTAL
         };
         _btnTorch.Click += OnBtnTorchClick;
         AddView(_btnTorch, torchParams);
+
+        // On API 35+ (Android 15+) the window draws edge-to-edge by default, so this view's
+        // bottom edge can end up behind the system navigation bar instead of above it. Without
+        // this, the buttons (fixed-distance from the bottom edge) render underneath the nav bar
+        // on devices using classic 3-button navigation.
+        ViewCompat.SetOnApplyWindowInsetsListener(this, this);
+    }
+
+    public WindowInsetsCompat? OnApplyWindowInsets(View? v, WindowInsetsCompat? insets)
+    {
+        if (insets is null)
+            return insets;
+
+        var navigationBarBottom = insets.GetInsets(WindowInsetsCompat.Type.NavigationBars())?.Bottom ?? 0;
+
+        if (_btnBack?.LayoutParameters is LayoutParams backParams)
+        {
+            backParams.BottomMargin = _buttonMarginVerticalPx + navigationBarBottom;
+            _btnBack.LayoutParameters = backParams;
+        }
+
+        if (_btnTorch?.LayoutParameters is LayoutParams torchParams)
+        {
+            torchParams.BottomMargin = _buttonMarginVerticalPx + navigationBarBottom;
+            _btnTorch.LayoutParameters = torchParams;
+        }
+
+        return insets;
     }
 
     protected override void OnDetachedFromWindow()
